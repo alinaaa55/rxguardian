@@ -2,12 +2,12 @@ import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function HomeScreen() {
@@ -145,25 +145,35 @@ export default function HomeScreen() {
 
       {/* BOTTOM NAV */}
       <View style={styles.bottomNav}>
-        <View style={styles.navItemActive}>
+        <TouchableOpacity style={styles.navItemActive}>
           <Feather name="home" size={20} color="#2563EB" />
           <Text style={styles.navTextActive}>Home</Text>
-        </View>
+        </TouchableOpacity>
 
-        <View style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("/meds")}
+        >
           <Feather name="calendar" size={20} color="#94A3B8" />
           <Text style={styles.navText}>Meds</Text>
-        </View>
+        </TouchableOpacity>
 
-        <View style={styles.navItem}>
+        {/* ✅ Chat tab — navigates to ChatScreen */}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("/ChatScreen")}
+        >
           <Feather name="message-circle" size={20} color="#94A3B8" />
           <Text style={styles.navText}>Chat</Text>
-        </View>
+        </TouchableOpacity>
 
-        <View style={styles.navItem}>
-          <Feather name="user" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Profile</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("/schedule")}
+        >
+          <Feather name="bar-chart-2" size={20} color="#94A3B8" />
+          <Text style={styles.navText}>Schedule</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
