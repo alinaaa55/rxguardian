@@ -1,31 +1,52 @@
+// app/home.tsx
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
 import {
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import BottomNav from "../components/BottomNav";
+
+// ─── Dynamic greeting helpers ─────────────────────────────────────────────────
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good Morning";
+  if (hour < 17) return "Good Afternoon";
+  return "Good Evening";
+}
+
+function getDynamicDate(): string {
+  const now = new Date();
+  return now.toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  });
+}
 
 export default function HomeScreen() {
   const router = useRouter();
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F1F5F9" />
+
       <View style={styles.contentWrapper}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 140 }}
+          contentContainerStyle={{ paddingBottom: 160 }}
         >
           {/* HEADER */}
           <View style={styles.header}>
-            <Text style={styles.date}>Sunday, 24 Oct</Text>
+            <Text style={styles.date}>{getDynamicDate()}</Text>
 
             <View style={styles.headerRow}>
-              <Text style={styles.greeting}>Good Morning, Ayaan</Text>
+              <Text style={styles.greeting}>{getGreeting()}, Ayaan</Text>
 
               <View style={styles.avatar}>
                 <Feather name="user" size={20} color="#1E3A8A" />
@@ -138,43 +159,8 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
-      {/* FLOATING SCAN BUTTON */}
-      <TouchableOpacity style={styles.fab} onPress={() => router.push("/scan")}>
-        <Feather name="clipboard" size={24} color="white" />
-      </TouchableOpacity>
-
-      {/* BOTTOM NAV */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItemActive}>
-          <Feather name="home" size={20} color="#2563EB" />
-          <Text style={styles.navTextActive}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/meds")}
-        >
-          <Feather name="calendar" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Meds</Text>
-        </TouchableOpacity>
-
-        {/* ✅ Chat tab — navigates to ChatScreen */}
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/ChatScreen")}
-        >
-          <Feather name="message-circle" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Chat</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/schedule")}
-        >
-          <Feather name="bar-chart-2" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Schedule</Text>
-        </TouchableOpacity>
-      </View>
+      {/* SHARED BOTTOM NAV (includes FAB) */}
+      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -388,52 +374,5 @@ const styles = StyleSheet.create({
     color: "#7F1D1D",
     marginTop: 5,
     lineHeight: 17,
-  },
-
-  fab: {
-    position: "absolute",
-    bottom: 80,
-    alignSelf: "center",
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#1E3A8A",
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 8,
-  },
-
-  bottomNav: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "white",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-  },
-
-  navItem: {
-    alignItems: "center",
-  },
-
-  navItemActive: {
-    alignItems: "center",
-  },
-
-  navText: {
-    fontSize: 12,
-    color: "#94A3B8",
-    marginTop: 4,
-  },
-
-  navTextActive: {
-    fontSize: 12,
-    color: "#2563EB",
-    marginTop: 4,
-    fontWeight: "600",
   },
 });

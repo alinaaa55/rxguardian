@@ -1,14 +1,17 @@
+// app/meds.tsx
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import BottomNav from "../components/BottomNav";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 const ALL_MEDS = [
@@ -96,11 +99,9 @@ const ALL_MEDS = [
 
 const FILTERS = ["All", "Active", "Taken", "Pending", "Refill Due"];
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function MedsScreen() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("All");
-  const [search, setSearch] = useState("");
 
   const filtered = ALL_MEDS.filter((med) => {
     if (activeFilter === "Active") return med.status === "active";
@@ -117,6 +118,8 @@ export default function MedsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F1F5F9" />
+
       {/* ── Header ── */}
       <View style={styles.header}>
         <View>
@@ -143,7 +146,7 @@ export default function MedsScreen() {
           <Text style={styles.summaryLabel}>Taken Today</Text>
         </View>
         <View style={styles.summaryDivider} />
-        <View style={[styles.summaryItem]}>
+        <View style={styles.summaryItem}>
           <Text
             style={[styles.summaryValue, refillDue > 0 && { color: "#DC2626" }]}
           >
@@ -166,7 +169,7 @@ export default function MedsScreen() {
         </View>
       )}
 
-      {/* ── Filter Chips ── */}
+      {/* ── Filter Chips — fixed uniform height ── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -277,14 +280,7 @@ export default function MedsScreen() {
                       ]}
                     />
                   </View>
-                  <Text
-                    style={[
-                      styles.durationText,
-                      med.refillDue && { color: "#DC2626" },
-                    ]}
-                  >
-                    {med.duration}
-                  </Text>
+                  <Text style={styles.durationText}>{med.duration}</Text>
                 </View>
               )}
             </View>
@@ -324,47 +320,15 @@ export default function MedsScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ── Bottom Nav ── */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/home")}
-        >
-          <Feather name="home" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Home</Text>
-        </TouchableOpacity>
-
-        {/* Meds — active */}
-        <TouchableOpacity style={styles.navItem}>
-          <Feather name="calendar" size={20} color="#2563EB" />
-          <Text style={styles.navTextActive}>Meds</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/ChatScreen")}
-        >
-          <Feather name="message-circle" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Chat</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/schedule")}
-        >
-          <Feather name="bar-chart-2" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Schedule</Text>
-        </TouchableOpacity>
-      </View>
+      {/* SHARED BOTTOM NAV */}
+      <BottomNav />
     </SafeAreaView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#F1F5F9" },
 
-  // Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -384,7 +348,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // Summary strip
   summaryStrip: {
     flexDirection: "row",
     backgroundColor: "#1E3A8A",
@@ -398,7 +361,6 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 11, color: "#93C5FD", marginTop: 2 },
   summaryDivider: { width: 1, backgroundColor: "#3B5BA8", marginVertical: 4 },
 
-  // Refill alert
   refillAlert: {
     flexDirection: "row",
     alignItems: "center",
@@ -413,19 +375,22 @@ const styles = StyleSheet.create({
   refillAlertText: { flex: 1, fontSize: 12, color: "#7F1D1D", lineHeight: 17 },
   refillNow: { fontSize: 12, fontWeight: "700", color: "#DC2626" },
 
-  // Filter chips
+  // FIX #4: chips have fixed height so they never resize on selection
   filterRow: {
     paddingHorizontal: 20,
     paddingBottom: 12,
     gap: 8,
+    alignItems: "center",   // vertically centre chips in the scroll row
   },
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
+    height: 36,             // fixed height — never changes
+    paddingHorizontal: 18,
+    borderRadius: 18,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
   },
   filterChipActive: {
     backgroundColor: "#1E3A8A",
@@ -434,14 +399,12 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, color: "#64748B", fontWeight: "500" },
   filterTextActive: { color: "#fff", fontWeight: "600" },
 
-  // Med list
   list: {
     paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 140,
     gap: 12,
   },
 
-  // Med card
   medCard: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -454,9 +417,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  medCardCompleted: {
-    opacity: 0.6,
-  },
+  medCardCompleted: { opacity: 0.6 },
   medIcon: {
     width: 48,
     height: 48,
@@ -474,7 +435,6 @@ const styles = StyleSheet.create({
   medDose: { fontSize: 12, color: "#64748B", marginBottom: 2 },
   medTime: { fontSize: 12, color: "#94A3B8" },
 
-  // Duration bar
   durationRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -491,7 +451,6 @@ const styles = StyleSheet.create({
   durationFill: { height: 4, borderRadius: 2 },
   durationText: { fontSize: 10, color: "#94A3B8", minWidth: 70 },
 
-  // Badges
   refillBadge: {
     backgroundColor: "#FEE2E2",
     paddingHorizontal: 8,
@@ -507,15 +466,12 @@ const styles = StyleSheet.create({
   },
   completedBadgeText: { fontSize: 10, color: "#94A3B8", fontWeight: "600" },
 
-  // Med right
   medRight: { alignItems: "center" },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
 
-  // Empty state
   emptyState: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { fontSize: 14, color: "#94A3B8" },
 
-  // Add med CTA
   addMedCard: {
     backgroundColor: "#EFF6FF",
     borderRadius: 20,
@@ -537,26 +493,4 @@ const styles = StyleSheet.create({
   },
   addMedText: { fontSize: 15, fontWeight: "700", color: "#2563EB" },
   addMedSub: { fontSize: 12, color: "#64748B" },
-
-  // Bottom nav
-  bottomNav: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-  },
-  navItem: { alignItems: "center" },
-  navText: { fontSize: 11, color: "#94A3B8", marginTop: 4 },
-  navTextActive: {
-    fontSize: 11,
-    color: "#2563EB",
-    marginTop: 4,
-    fontWeight: "600",
-  },
 });
