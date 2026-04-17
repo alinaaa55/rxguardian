@@ -1,9 +1,11 @@
 // app/meds.tsx
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import {
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,8 +15,8 @@ import {
 } from "react-native";
 import BottomNav from "../components/BottomNav";
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const ALL_MEDS = [
+// ─── Shared in-memory store so add-med.tsx can push new entries ───────────────
+let _meds = [
   {
     id: "1",
     name: "Metformin",
@@ -50,18 +52,6 @@ const ALL_MEDS = [
   {
     id: "3",
     name: "Vitamin D",
-    dose: "1000 IU",
-    type: "Softgel",
-    dosage: "1 Capsule",
-    frequency: "1x Daily",
-    duration: "45 Days Left",
-    time: "1:00 PM • After meal",
-    icon: "white-balance-sunny",
-    color: "#EAB308",
-    bgColor: "#FEF9C3",
-    status: "active",
-    taken: true,
-    refillDue: false,
   },
   {
     id: "4",
@@ -97,13 +87,28 @@ const ALL_MEDS = [
   },
 ];
 
+export const MedStore = {
+  getAll: () => _meds,
+  add: (med: any) => {
+    _meds = [med, ..._meds];
+  },
+};
+
 const FILTERS = ["All", "Active", "Taken", "Pending", "Refill Due"];
 
 export default function MedsScreen() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("All");
+  const [meds, setMeds] = useState(MedStore.getAll());
 
-  const filtered = ALL_MEDS.filter((med) => {
+  // Refresh list every time this screen comes into focus (e.g. after adding)
+  useFocusEffect(
+    useCallback(() => {
+      setMeds(MedStore.getAll());
+    }, []),
+  );
+
+  const filtered = meds.filter((med) => {
     if (activeFilter === "Active") return med.status === "active";
     if (activeFilter === "Taken") return med.taken;
     if (activeFilter === "Pending")
@@ -112,9 +117,9 @@ export default function MedsScreen() {
     return true;
   });
 
-  const activeMeds = ALL_MEDS.filter((m) => m.status === "active").length;
-  const takenToday = ALL_MEDS.filter((m) => m.taken).length;
-  const refillDue = ALL_MEDS.filter((m) => m.refillDue).length;
+  const activeMeds = meds.filter((m) => m.status === "active").length;
+  const takenToday = meds.filter((m) => m.taken).length;
+  const refillDue = meds.filter((m) => m.refillDue).length;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -128,7 +133,7 @@ export default function MedsScreen() {
         </View>
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => router.push("/scan")}
+          onPress={() => router.push("/add-med")}
         >
           <Feather name="plus" size={20} color="#fff" />
         </TouchableOpacity>
@@ -310,7 +315,7 @@ export default function MedsScreen() {
         {/* Add new med CTA */}
         <TouchableOpacity
           style={styles.addMedCard}
-          onPress={() => router.push("/scan")}
+          onPress={() => router.push("/add-med")}
         >
           <View style={styles.addMedIcon}>
             <Feather name="plus" size={22} color="#2563EB" />
@@ -380,10 +385,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 12,
     gap: 8,
-    alignItems: "center",   // vertically centre chips in the scroll row
+    alignItems: "center", // vertically centre chips in the scroll row
   },
   filterChip: {
-    height: 36,             // fixed height — never changes
+    height: 36, // fixed height — never changes
     paddingHorizontal: 18,
     borderRadius: 18,
     backgroundColor: "#fff",
@@ -401,7 +406,7 @@ const styles = StyleSheet.create({
 
   list: {
     paddingHorizontal: 20,
-    paddingBottom: 140,
+    paddingBottom: 80,
     gap: 12,
   },
 

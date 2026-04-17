@@ -48,10 +48,13 @@ export default function HomeScreen() {
             <View style={styles.headerRow}>
               <Text style={styles.greeting}>{getGreeting()}, Ayaan</Text>
 
-              <View style={styles.avatar}>
+              <TouchableOpacity
+                style={styles.avatar}
+                onPress={() => router.push("/profile")}
+              >
                 <Feather name="user" size={20} color="#1E3A8A" />
                 <View style={styles.onlineDot} />
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
