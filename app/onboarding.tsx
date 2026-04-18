@@ -1,11 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
-  Image,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -23,82 +22,56 @@ import Animated, {
 
 const { width, height } = Dimensions.get("window");
 
-interface OnboardingItem {
-  id: string;
-  title: string;
-  highlight: string;
-  description: string;
-  image: any;
-  buttonText: string;
-  showScanOverlay?: boolean;
-}
-
-const DATA: OnboardingItem[] = [
+const DATA = [
   {
     id: "1",
     title: "Scan Any",
     highlight: "Prescription",
     description:
-      "Snap a photo of your handwritten script. RxGuardian's advanced AI decodes the details in seconds.",
-    image: { uri: "https://placeholder.com/scan-bg" },
+      "Snap a photo of your handwritten script. AI decodes it instantly.",
     buttonText: "Next",
-    showScanOverlay: true,
   },
   {
     id: "2",
     title: "Safety",
     highlight: "First",
-    description:
-      "RxGuardian analyzes every new prescription against your current meds to stop dangerous interactions.",
-    image: { uri: "https://placeholder.com/interaction-bg" },
+    description: "Detect dangerous drug interactions before they harm you.",
     buttonText: "Next",
   },
   {
     id: "3",
     title: "Never Miss",
     highlight: "a Dose",
-    description:
-      "AI-powered scheduling adapts to your life, so you can focus on getting better, not just remembering pills.",
-    image: { uri: "https://placeholder.com/streak-bg" },
+    description: "Smart reminders and tracking keep your health on track.",
     buttonText: "Get Started",
   },
 ];
 
-const PaginationDot = ({
-  index,
-  scrollX,
-}: {
-  index: number;
-  scrollX: Animated.SharedValue<number>;
-}) => {
-  const animatedDotStyle = useAnimatedStyle(() => {
+const PaginationDot = ({ index, scrollX }: any) => {
+  const style = useAnimatedStyle(() => {
     const inputRange = [
       (index - 1) * width,
       index * width,
       (index + 1) * width,
     ];
 
-    const dotWidth = interpolate(
-      scrollX.value,
-      inputRange,
-      [8, 24, 8],
-      Extrapolate.CLAMP,
-    );
-
-    const opacity = interpolate(
-      scrollX.value,
-      inputRange,
-      [0.3, 1, 0.3],
-      Extrapolate.CLAMP,
-    );
-
     return {
-      width: dotWidth,
-      opacity,
+      width: interpolate(
+        scrollX.value,
+        inputRange,
+        [8, 24, 8],
+        Extrapolate.CLAMP,
+      ),
+      opacity: interpolate(
+        scrollX.value,
+        inputRange,
+        [0.3, 1, 0.3],
+        Extrapolate.CLAMP,
+      ),
     };
   });
 
-  return <Animated.View style={[styles.dot, animatedDotStyle]} />;
+  return <Animated.View style={[styles.dot, style]} />;
 };
 
 export default function OnboardingPager() {
@@ -109,12 +82,11 @@ export default function OnboardingPager() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const onScroll = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollX.value = event.contentOffset.x;
+    onScroll: (e) => {
+      scrollX.value = e.contentOffset.x;
     },
-    onMomentumEnd: (event) => {
-      const index = Math.round(event.contentOffset.x / width);
-      runOnJS(setCurrentIndex)(index);
+    onMomentumEnd: (e) => {
+      runOnJS(setCurrentIndex)(Math.round(e.contentOffset.x / width));
     },
   });
 
@@ -128,41 +100,65 @@ export default function OnboardingPager() {
     }
   };
 
-  const renderItem = ({ item }: { item: OnboardingItem }) => (
+  const renderItem = ({ item }: any) => (
     <View style={styles.slide}>
-      <View style={styles.imageWrapper}>
-        <View style={styles.card}>
-          <Image source={item.image} style={styles.mainImage} />
-          {item.showScanOverlay && (
-            <View style={styles.scanOverlay}>
-              <View style={styles.aiBadge}>
-                <Text style={styles.aiBadgeText}>✧ AI SCANNING</Text>
-              </View>
+      {/* VISUAL CARD */}
+      <View style={styles.card}>
+        <LinearGradient
+          colors={["#1E293B", "#2D458E"]}
+          style={styles.gradientCard}
+        >
+          {/* SLIDE 1 */}
+          {item.id === "1" && (
+            <>
+              <Feather name="camera" size={60} color="white" />
               <View style={styles.scanLine} />
-            </View>
+              <Text style={styles.cardLabel}>AI SCANNING</Text>
+            </>
           )}
-        </View>
+
+          {/* SLIDE 2 */}
+          {item.id === "2" && (
+            <>
+              <Feather name="shield" size={60} color="white" />
+              <Text style={styles.cardLabel}>Interaction Check</Text>
+              <Text style={styles.warning}>⚠ High Risk Detected</Text>
+            </>
+          )}
+
+          {/* SLIDE 3 */}
+          {item.id === "3" && (
+            <>
+              <Feather name="bell" size={60} color="white" />
+              <Text style={styles.cardLabel}>Daily Reminder</Text>
+              <Text style={styles.success}>✔ 100% Adherence</Text>
+            </>
+          )}
+        </LinearGradient>
       </View>
 
-      <View style={styles.textWrapper}>
+      {/* TEXT */}
+      <View style={styles.textBox}>
         <Text style={styles.title}>
           {item.title} {"\n"}
           <Text style={styles.highlight}>{item.highlight}</Text>
         </Text>
 
-        <Text style={styles.description}>{item.description}</Text>
+        <Text style={styles.desc}>{item.description}</Text>
       </View>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* SKIP */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.replace("/home")}>
-          <Text style={styles.skipText}>Skip ›</Text>
+          <Text style={styles.skip}>Skip ›</Text>
         </TouchableOpacity>
       </View>
 
+      {/* SLIDES */}
       <Animated.FlatList
         ref={flatListRef as any}
         data={DATA}
@@ -171,35 +167,23 @@ export default function OnboardingPager() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
-        scrollEventThrottle={16}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ flexGrow: 1 }}
       />
 
+      {/* FOOTER */}
       <View style={styles.footer}>
-        <View style={styles.paginationContainer}>
+        <View style={styles.pagination}>
           {DATA.map((_, i) => (
             <PaginationDot key={i} index={i} scrollX={scrollX} />
           ))}
         </View>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={styles.buttonContainer}
-          onPress={handleNext}
-        >
-          <LinearGradient
-            colors={["#2D458E", "#1E293B"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.button}
-          >
-            <Text style={styles.buttonText}>
-              {DATA[currentIndex].buttonText}
-            </Text>
+        <TouchableOpacity style={styles.btnWrap} onPress={handleNext}>
+          <LinearGradient colors={["#2D458E", "#1E293B"]} style={styles.btn}>
+            <Text style={styles.btnText}>{DATA[currentIndex].buttonText}</Text>
 
-            <View style={styles.iconCircle}>
-              <Feather name="arrow-right" size={20} color="white" />
+            <View style={styles.arrow}>
+              <Feather name="arrow-right" size={18} color="#fff" />
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -208,87 +192,86 @@ export default function OnboardingPager() {
   );
 }
 
+// ─── STYLES ───
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8FAFC" },
 
-  header: {
-    paddingHorizontal: 25,
-    alignItems: "flex-end",
-    paddingTop: 10,
-  },
-
-  skipText: {
-    color: "#64748B",
-    fontSize: 16,
-    fontWeight: "500",
-  },
+  header: { alignItems: "flex-end", padding: 20 },
+  skip: { color: "#64748B", fontSize: 16 },
 
   slide: {
     width,
-    flex: 1, // ✅ prevents clipping
     alignItems: "center",
-    paddingHorizontal: 30,
-  },
-
-  imageWrapper: {
-    width: "100%",
-    height: height * 0.42,
-    marginTop: 20,
+    paddingHorizontal: 25,
   },
 
   card: {
-    flex: 1,
+    width: "100%",
+    height: height * 0.42,
     borderRadius: 30,
     overflow: "hidden",
-    backgroundColor: "#fff",
-    elevation: 5,
-    shadowOpacity: 0.1,
+    marginTop: 10,
+    elevation: 6,
   },
 
-  mainImage: {
-    width: "100%",
-    height: "100%",
-  },
-
-  textWrapper: {
-    marginTop: 35,
-    marginBottom: 60,
+  gradientCard: {
+    flex: 1,
+    borderRadius: 30,
+    justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 10,
+    gap: 15,
   },
+
+  scanLine: {
+    width: "70%",
+    height: 2,
+    backgroundColor: "#3B82F6",
+  },
+
+  cardLabel: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  warning: {
+    color: "#FCA5A5",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  success: {
+    color: "#86EFAC",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  textBox: { marginTop: 35, alignItems: "center" },
 
   title: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: "800",
     textAlign: "center",
     color: "#0F172A",
-    lineHeight: 38,
-    letterSpacing: 0.3,
   },
 
-  highlight: {
-    color: "#2D458E",
-  },
+  highlight: { color: "#2D458E" },
 
-  description: {
+  desc: {
     textAlign: "center",
     color: "#64748B",
     fontSize: 16,
-    marginTop: 18,
-    lineHeight: 26, // ✅ better readability
-    paddingHorizontal: 10,
+    marginTop: 15,
+    lineHeight: 24,
   },
 
-  footer: {
-    paddingHorizontal: 25,
-    paddingBottom: 40,
-  },
+  footer: { padding: 25 },
 
-  paginationContainer: {
+  pagination: {
     flexDirection: "row",
     justifyContent: "center",
-    marginBottom: 35,
-    gap: 8,
+    marginBottom: 25,
+    gap: 6,
   },
 
   dot: {
@@ -297,58 +280,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#2D458E",
   },
 
-  buttonContainer: {
-    width: "100%",
-  },
+  btnWrap: { width: "100%" },
 
-  button: {
-    height: 65,
-    borderRadius: 35,
-    flexDirection: "row",
-    alignItems: "center",
+  btn: {
+    height: 60,
+    borderRadius: 30,
     justifyContent: "center",
+    alignItems: "center",
   },
 
-  buttonText: {
-    color: "white",
+  btnText: {
+    color: "#fff",
     fontSize: 18,
     fontWeight: "700",
   },
 
-  iconCircle: {
+  arrow: {
     position: "absolute",
     right: 15,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
+    width: 35,
+    height: 35,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-  },
-
-  scanOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  aiBadge: {
-    position: "absolute",
-    top: 30,
-    backgroundColor: "#2D458E",
-    padding: 6,
-    borderRadius: 15,
-  },
-
-  aiBadgeText: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-
-  scanLine: {
-    width: "80%",
-    height: 2,
-    backgroundColor: "#3b82f6",
   },
 });
