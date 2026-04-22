@@ -1,6 +1,4 @@
-// app/(tabs)/chat.tsx  — or  app/chat.tsx  depending on your Expo Router structure
-// RxGuardian AI · Chatbot Screen
-
+// app/chat.tsx
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -11,7 +9,6 @@ import {
     Image,
     KeyboardAvoidingView,
     Platform,
-    SafeAreaView,
     StatusBar,
     StyleSheet,
     Text,
@@ -19,6 +16,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "../constants/theme";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type MedicineSuggestion = {
@@ -34,29 +33,6 @@ type Message = {
   imageUri?: string;
   suggestion?: MedicineSuggestion;
   timestamp: Date;
-};
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-const COLORS = {
-  background: "#F2F4F7",
-  surface: "#FFFFFF",
-  userBubble: "#1A2E4A",
-  aiBubble: "#FFFFFF",
-  userText: "#FFFFFF",
-  aiText: "#1A2E4A",
-  accent: "#2BB5A0",
-  accentLight: "#E8F8F6",
-  border: "#E4E8EE",
-  placeholder: "#9BA8B7",
-  timestamp: "#9BA8B7",
-  suggestionBg: "#F7FFFE",
-  suggestionBorder: "#C8EDE8",
-  priceTag: "#2BB5A0",
-  headerBg: "#FFFFFF",
-  statusOnline: "#2BB5A0",
-  inputBg: "#FFFFFF",
-  sendBtn: "#1A2E4A",
-  iconMuted: "#9BA8B7",
 };
 
 // ─── Mock AI Response Logic ───────────────────────────────────────────────────
@@ -122,7 +98,7 @@ const MedicineSuggestionCard = ({
 }) => (
   <View style={styles.suggestionCard}>
     <View style={styles.suggestionIcon}>
-      <MaterialCommunityIcons name="pill" size={22} color={COLORS.accent} />
+      <MaterialCommunityIcons name="pill" size={22} color={theme.colors.primaryAccent} />
     </View>
     <View style={styles.suggestionInfo}>
       <Text style={styles.suggestionName}>{suggestion.name}</Text>
@@ -166,41 +142,43 @@ const TypingIndicator = () => {
   }, []);
 
   return (
-    <View style={[styles.bubbleWrapper, { alignSelf: "flex-start" }]}>
+    <View style={[styles.bubbleWrapper, styles.aiWrapper]}>
       <View style={styles.avatarSmall}>
         <MaterialCommunityIcons
           name="robot-happy-outline"
           size={16}
-          color={COLORS.accent}
+          color={theme.colors.primaryAccent}
         />
       </View>
-      <View
-        style={[
-          styles.bubble,
-          styles.aiBubble,
-          { paddingHorizontal: 16, paddingVertical: 12 },
-        ]}
-      >
-        <View style={{ flexDirection: "row", gap: 5 }}>
-          {dots.map((dot, i) => (
-            <Animated.View
-              key={i}
-              style={[
-                styles.typingDot,
-                {
-                  opacity: dot,
-                  transform: [
-                    {
-                      translateY: dot.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, -4],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-          ))}
+      <View style={{ flexShrink: 1, gap: 4 }}>
+        <View
+          style={[
+            styles.bubble,
+            styles.aiBubble,
+            { paddingHorizontal: 16, paddingVertical: 12 },
+          ]}
+        >
+          <View style={{ flexDirection: "row", gap: 5 }}>
+            {dots.map((dot, i) => (
+              <Animated.View
+                key={i}
+                style={[
+                  styles.typingDot,
+                  {
+                    opacity: dot,
+                    transform: [
+                      {
+                        translateY: dot.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, -4],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            ))}
+          </View>
         </View>
       </View>
     </View>
@@ -239,68 +217,66 @@ const MessageBubble = ({ message }: { message: Message }) => {
           <MaterialCommunityIcons
             name="robot-happy-outline"
             size={16}
-            color={COLORS.accent}
+            color={theme.colors.primaryAccent}
           />
         </View>
       )}
 
-      <View style={{ maxWidth: "78%", gap: 6 }}>
-        {message.imageUri && (
-          <View
+      <View style={{ maxWidth: "78%" }}>
+        <View style={{ gap: 4 }}>
+            {message.imageUri && (
+                <View
+                    style={[
+                    styles.bubble,
+                    isUser ? styles.userBubble : styles.aiBubble,
+                    { padding: 6 },
+                    ]}
+                >
+                    <Image
+                    source={{ uri: message.imageUri }}
+                    style={styles.uploadedImage}
+                    resizeMode="cover"
+                    />
+                </View>
+            )}
+
+            {message.text ? (
+                <View
+                    style={[
+                    styles.bubble,
+                    isUser ? styles.userBubble : styles.aiBubble,
+                    ]}
+                >
+                    <Text
+                    style={[
+                        styles.bubbleText,
+                        isUser ? styles.userText : styles.aiText,
+                    ]}
+                    >
+                    {formatText(message.text)}
+                    </Text>
+                </View>
+            ) : null}
+
+            {message.suggestion && (
+                <MedicineSuggestionCard suggestion={message.suggestion} />
+            )}
+        </View>
+
+        <Text 
             style={[
-              styles.bubble,
-              isUser ? styles.userBubble : styles.aiBubble,
-              { padding: 6 },
+                styles.timestamp, 
+                isUser ? { textAlign: 'right', alignSelf: 'flex-end', marginRight: 4 } : { textAlign: 'left', alignSelf: 'flex-start', marginLeft: 4 },
+                { marginTop: 4 }
             ]}
-          >
-            <Image
-              source={{ uri: message.imageUri }}
-              style={styles.uploadedImage}
-              resizeMode="cover"
-            />
-            <Text
-              style={{
-                fontSize: 11,
-                color: isUser ? "#A8C4E0" : COLORS.placeholder,
-                textAlign: "right",
-                marginTop: 4,
-              }}
-            >
-              Uploaded
-            </Text>
-          </View>
-        )}
-
-        {message.text ? (
-          <View
-            style={[
-              styles.bubble,
-              isUser ? styles.userBubble : styles.aiBubble,
-            ]}
-          >
-            <Text
-              style={[
-                styles.bubbleText,
-                isUser ? styles.userText : styles.aiText,
-              ]}
-            >
-              {formatText(message.text)}
-            </Text>
-          </View>
-        ) : null}
-
-        {message.suggestion && (
-          <MedicineSuggestionCard suggestion={message.suggestion} />
-        )}
-
-        <Text style={[styles.timestamp, isUser ? { textAlign: "right" } : {}]}>
-          {timeStr}
+        >
+            {timeStr}
         </Text>
       </View>
 
       {isUser && (
         <View style={styles.userAvatarSmall}>
-          <Ionicons name="person" size={14} color={COLORS.surface} />
+          <Ionicons name="person" size={14} color={theme.colors.surface} />
         </View>
       )}
     </View>
@@ -384,13 +360,13 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.headerBg} />
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="dark-content" />
 
       {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color={COLORS.userBubble} />
+          <Ionicons name="chevron-back" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -398,7 +374,7 @@ export default function ChatScreen() {
             <MaterialCommunityIcons
               name="robot-happy-outline"
               size={22}
-              color={COLORS.surface}
+              color={theme.colors.surface}
             />
           </View>
           <View>
@@ -410,20 +386,14 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.headerRight}>
-          <Ionicons
-            name="person-circle-outline"
-            size={28}
-            color={COLORS.iconMuted}
-          />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
       {/* ── Messages + Input ── */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 20}
       >
         <FlatList
           ref={flatRef}
@@ -445,49 +415,49 @@ export default function ChatScreen() {
               <Ionicons
                 name="close-circle"
                 size={20}
-                color={COLORS.placeholder}
+                color={theme.colors.text.secondary}
               />
             </TouchableOpacity>
           </View>
         )}
 
         {/* ── Input Bar ── */}
-        <View style={styles.inputBar}>
-          <TouchableOpacity onPress={pickImage} style={styles.iconBtn}>
-            <Ionicons
-              name="add-circle-outline"
-              size={26}
-              color={COLORS.iconMuted}
+        <SafeAreaView edges={['bottom']}>
+          <View style={styles.inputBar}>
+            <TouchableOpacity onPress={pickImage} style={styles.iconBtn}>
+              <Ionicons
+                name="add-circle-outline"
+                size={26}
+                color={theme.colors.tabInactive}
+              />
+            </TouchableOpacity>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Type a message…"
+              placeholderTextColor={theme.colors.tabInactive}
+              value={input}
+              onChangeText={setInput}
+              multiline
+              maxLength={500}
             />
-          </TouchableOpacity>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Type a message…"
-            placeholderTextColor={COLORS.placeholder}
-            value={input}
-            onChangeText={setInput}
-            multiline
-            maxLength={500}
-            returnKeyType="send"
-            onSubmitEditing={sendMessage}
-          />
+            <TouchableOpacity onPress={takePicture} style={styles.iconBtn}>
+              <Feather name="camera" size={22} color={theme.colors.tabInactive} />
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={takePicture} style={styles.iconBtn}>
-            <Feather name="camera" size={22} color={COLORS.iconMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={sendMessage}
-            style={[
-              styles.sendBtn,
-              !input.trim() && !pendingImage && styles.sendBtnDisabled,
-            ]}
-            disabled={!input.trim() && !pendingImage}
-          >
-            <Ionicons name="send" size={17} color={COLORS.surface} />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              onPress={sendMessage}
+              style={[
+                styles.sendBtn,
+                !input.trim() && !pendingImage && styles.sendBtnDisabled,
+              ]}
+              disabled={!input.trim() && !pendingImage}
+            >
+              <Ionicons name="send" size={17} color={theme.colors.surface} />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -495,7 +465,7 @@ export default function ChatScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
 
   // Header
   header: {
@@ -503,9 +473,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: theme.colors.border,
     elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.06,
@@ -524,14 +494,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.userBubble,
+    backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: COLORS.userBubble,
+    color: theme.colors.primary,
     letterSpacing: 0.2,
   },
   onlineRow: {
@@ -544,54 +514,53 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: COLORS.statusOnline,
+    backgroundColor: theme.colors.successLight,
   },
-  onlineText: { fontSize: 12, color: COLORS.statusOnline, fontWeight: "500" },
-  headerRight: { padding: 4 },
+  onlineText: { fontSize: 12, color: theme.colors.success, fontWeight: "500" },
 
   // Messages
   messageList: { paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
   bubbleWrapper: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "flex-start", 
     gap: 8,
-    marginVertical: 3,
+    marginVertical: 4,
   },
-  userWrapper: { alignSelf: "flex-end", flexDirection: "row-reverse" },
+  userWrapper: { alignSelf: "flex-end" },
   aiWrapper: { alignSelf: "flex-start" },
   avatarSmall: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: COLORS.accentLight,
+    backgroundColor: theme.colors.primaryLight,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+    marginTop: 2,
   },
   userAvatarSmall: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: COLORS.accent,
+    backgroundColor: theme.colors.primaryAccent,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+    marginLeft: 8,
+    marginTop: 2,
   },
   bubble: {
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    maxWidth: "100%",
   },
   userBubble: {
-    backgroundColor: COLORS.userBubble,
+    backgroundColor: theme.colors.primary,
     borderBottomRightRadius: 4,
   },
   aiBubble: {
-    backgroundColor: COLORS.aiBubble,
+    backgroundColor: theme.colors.surface,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.colors.border,
     shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 4,
@@ -599,13 +568,11 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   bubbleText: { fontSize: 14.5, lineHeight: 21 },
-  userText: { color: COLORS.userText },
-  aiText: { color: COLORS.aiText },
+  userText: { color: theme.colors.surface },
+  aiText: { color: theme.colors.text.primary },
   timestamp: {
-    fontSize: 11,
-    color: COLORS.timestamp,
-    marginTop: 1,
-    paddingHorizontal: 2,
+    fontSize: 10,
+    color: theme.colors.text.secondary,
   },
   uploadedImage: { width: 180, height: 140, borderRadius: 12 },
 
@@ -614,16 +581,16 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: COLORS.accent,
+    backgroundColor: theme.colors.primaryAccent,
   },
 
   // Medicine suggestion card
   suggestionCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.suggestionBg,
+    backgroundColor: theme.colors.successLight,
     borderWidth: 1,
-    borderColor: COLORS.suggestionBorder,
+    borderColor: theme.colors.success,
     borderRadius: 14,
     padding: 12,
     gap: 10,
@@ -632,15 +599,15 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.accentLight,
+    backgroundColor: theme.colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
   suggestionInfo: { flex: 1 },
-  suggestionName: { fontSize: 14, fontWeight: "700", color: COLORS.userBubble },
-  suggestionQty: { fontSize: 12, color: COLORS.placeholder, marginTop: 2 },
+  suggestionName: { fontSize: 14, fontWeight: "700", color: theme.colors.text.primary },
+  suggestionQty: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 2 },
   suggestionPrice: {
-    backgroundColor: COLORS.priceTag,
+    backgroundColor: theme.colors.primaryAccent,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
@@ -651,55 +618,54 @@ const styles = StyleSheet.create({
   pendingImageRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.accentLight,
+    backgroundColor: theme.colors.primaryLight,
     marginHorizontal: 14,
     marginBottom: 6,
     padding: 8,
     borderRadius: 12,
     gap: 10,
     borderWidth: 1,
-    borderColor: COLORS.suggestionBorder,
+    borderColor: theme.colors.border,
   },
   pendingThumb: { width: 44, height: 44, borderRadius: 8 },
   pendingLabel: {
     flex: 1,
     fontSize: 13,
-    color: COLORS.userBubble,
+    color: theme.colors.text.primary,
     fontWeight: "500",
   },
 
   // Input bar
   inputBar: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     paddingHorizontal: 10,
     paddingVertical: 10,
-    paddingBottom: Platform.OS === "ios" ? 16 : 10,
-    backgroundColor: COLORS.inputBg,
+    backgroundColor: theme.colors.surface,
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: theme.colors.border,
     gap: 8,
   },
   iconBtn: { padding: 4, justifyContent: "center", alignItems: "center" },
   input: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.colors.background,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === "ios" ? 10 : 8,
     fontSize: 14.5,
-    color: COLORS.userBubble,
+    color: theme.colors.text.primary,
     maxHeight: 110,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: theme.colors.border,
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.sendBtn,
+    backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  sendBtnDisabled: { backgroundColor: COLORS.border },
+  sendBtnDisabled: { backgroundColor: theme.colors.border },
 });

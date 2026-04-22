@@ -1,9 +1,9 @@
+// app/(tabs)/schedule.tsx
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Dimensions,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "../../constants/theme";
 
 const { width } = Dimensions.get("window");
 
@@ -43,7 +45,7 @@ const SCHEDULE = {
       name: "Lipitor",
       dose: "20mg • Take with breakfast",
       icon: "pill",
-      color: "#F97316",
+      color: theme.colors.secondary,
       taken: false,
     },
     {
@@ -61,7 +63,7 @@ const SCHEDULE = {
       name: "Metformin",
       dose: "500mg • Take with Lunch",
       icon: "pill",
-      color: "#2563EB",
+      color: theme.colors.primaryAccent,
       taken: true,
     },
   ],
@@ -106,7 +108,7 @@ const MedRow = ({ name, dose, icon, color, taken, onToggle }: MedRowProps) => (
       onPress={onToggle}
       style={[styles.checkCircle, taken && styles.checkCircleDone]}
     >
-      {taken && <Feather name="check" size={14} color="#fff" />}
+      {taken && <Feather name="check" size={14} color={theme.colors.surface} />}
     </TouchableOpacity>
   </View>
 );
@@ -132,7 +134,7 @@ const BarChart = ({ data }: { data: number[] }) => (
                 styles.barFill,
                 {
                   height: barH,
-                  backgroundColor: isToday ? "#1E3A8A" : "#BFDBFE",
+                  backgroundColor: isToday ? theme.colors.primary : "#BFDBFE",
                 },
               ]}
             />
@@ -140,7 +142,7 @@ const BarChart = ({ data }: { data: number[] }) => (
           <Text
             style={[
               styles.barLabel,
-              isToday && { color: "#1E3A8A", fontWeight: "700" },
+              isToday && { color: theme.colors.primary, fontWeight: "700" },
             ]}
           >
             {DAYS_LABEL[i]}
@@ -157,7 +159,7 @@ const DotRow = ({ taken }: { taken: boolean[] }) => (
     {taken.map((t, i) => (
       <View
         key={i}
-        style={[styles.dot, { backgroundColor: t ? "#1E3A8A" : "#FCA5A5" }]}
+        style={[styles.dot, { backgroundColor: t ? theme.colors.primary : "#FCA5A5" }]}
       />
     ))}
   </View>
@@ -202,7 +204,7 @@ export default function ScheduleScreen() {
           <Text style={styles.headerSub}>Track & analyze your medications</Text>
         </View>
         <TouchableOpacity style={styles.headerIcon}>
-          <Feather name="bell" size={20} color="#1E3A8A" />
+          <Feather name="bell" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -218,7 +220,7 @@ export default function ScheduleScreen() {
           <Feather
             name="calendar"
             size={14}
-            color={activeTab === "schedule" ? "#fff" : "#64748B"}
+            color={activeTab === "schedule" ? theme.colors.surface : theme.colors.text.secondary}
           />
           <Text
             style={[
@@ -239,7 +241,7 @@ export default function ScheduleScreen() {
           <Feather
             name="bar-chart-2"
             size={14}
-            color={activeTab === "analytics" ? "#fff" : "#64748B"}
+            color={activeTab === "analytics" ? theme.colors.surface : theme.colors.text.secondary}
           />
           <Text
             style={[
@@ -254,7 +256,7 @@ export default function ScheduleScreen() {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 20 }}
+        contentContainerStyle={{ paddingBottom: 160, paddingHorizontal: 20 }}
       >
         {/* ════════════════ SCHEDULE TAB ════════════════ */}
         {activeTab === "schedule" && (
@@ -297,12 +299,12 @@ export default function ScheduleScreen() {
                 <MaterialCommunityIcons
                   name="robot-happy-outline"
                   size={18}
-                  color="#2563EB"
+                  color={theme.colors.primaryAccent}
                 />
                 <Text style={styles.aiCardTitle}>AI Suggestion</Text>
               </View>
               <TouchableOpacity>
-                <Feather name="x" size={16} color="#94A3B8" />
+                <Feather name="x" size={16} color={theme.colors.tabInactive} />
               </TouchableOpacity>
               <Text style={styles.aiCardText}>
                 Consider spacing your Lipitor and Vitamin D by at least 2 hours
@@ -374,7 +376,7 @@ export default function ScheduleScreen() {
                   <Ionicons
                     name="volume-high-outline"
                     size={20}
-                    color="#1E3A8A"
+                    color={theme.colors.primary}
                   />
                   <View style={{ marginLeft: 12 }}>
                     <Text style={styles.toggleTitle}>Voice Reminder</Text>
@@ -383,8 +385,8 @@ export default function ScheduleScreen() {
                 </View>
                 <Switch
                   value={true}
-                  trackColor={{ false: "#E2E8F0", true: "#1E3A8A" }}
-                  thumbColor="#fff"
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={theme.colors.surface}
                 />
               </View>
               <View style={styles.divider} />
@@ -393,7 +395,7 @@ export default function ScheduleScreen() {
                   <MaterialCommunityIcons
                     name="human-cane"
                     size={20}
-                    color="#94A3B8"
+                    color={theme.colors.tabInactive}
                   />
                   <View style={{ marginLeft: 12 }}>
                     <Text style={styles.toggleTitle}>Elderly Mode</Text>
@@ -402,8 +404,8 @@ export default function ScheduleScreen() {
                 </View>
                 <Switch
                   value={false}
-                  trackColor={{ false: "#E2E8F0", true: "#1E3A8A" }}
-                  thumbColor="#fff"
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={theme.colors.surface}
                 />
               </View>
             </View>
@@ -416,17 +418,17 @@ export default function ScheduleScreen() {
             {/* Stats row */}
             <View style={styles.statsRow}>
               <View style={styles.statCard}>
-                <Ionicons name="flame-outline" size={18} color="#F97316" />
+                <Ionicons name="flame-outline" size={18} color={theme.colors.secondary} />
                 <Text style={styles.statValue}>{ANALYTICS.streak}</Text>
                 <Text style={styles.statLabel}>Day Streak</Text>
               </View>
               <View style={styles.statCard}>
-                <Feather name="check-circle" size={18} color="#16A34A" />
+                <Feather name="check-circle" size={18} color={theme.colors.success} />
                 <Text style={styles.statValue}>{ANALYTICS.taken}</Text>
                 <Text style={styles.statLabel}>Taken</Text>
               </View>
               <View style={styles.statCard}>
-                <Feather name="trending-up" size={18} color="#2563EB" />
+                <Feather name="trending-up" size={18} color={theme.colors.primaryAccent} />
                 <Text style={styles.statValue}>
                   {ANALYTICS.weeklyAdherence}%
                 </Text>
@@ -439,7 +441,7 @@ export default function ScheduleScreen() {
               <View style={styles.chartHeader}>
                 <Text style={styles.chartTitle}>Weekly Adherence</Text>
                 <View style={styles.trendBadge}>
-                  <Feather name="arrow-up-right" size={12} color="#16A34A" />
+                  <Feather name="arrow-up-right" size={12} color={theme.colors.success} />
                   <Text style={styles.trendText}>{ANALYTICS.trend}</Text>
                 </View>
               </View>
@@ -452,7 +454,7 @@ export default function ScheduleScreen() {
                       key={i}
                       style={[
                         styles.chartDayLabel,
-                        i === 2 && { color: "#1E3A8A", fontWeight: "700" },
+                        i === 2 && { color: theme.colors.primary, fontWeight: "700" },
                       ]}
                     >
                       {d}
@@ -475,7 +477,7 @@ export default function ScheduleScreen() {
               <Text style={styles.insightTitle}>Risk Alert: Evening Doses</Text>
               <Text style={styles.insightText}>
                 Based on your recent activity patterns, our AI predicts a{" "}
-                <Text style={{ color: "#DC2626", fontWeight: "700" }}>
+                <Text style={{ color: theme.colors.danger, fontWeight: "700" }}>
                   68% chance
                 </Text>{" "}
                 of missing doses after 6 PM this week.
@@ -493,7 +495,7 @@ export default function ScheduleScreen() {
                 <Ionicons
                   name="information-circle-outline"
                   size={18}
-                  color="#94A3B8"
+                  color={theme.colors.tabInactive}
                 />
               </View>
 
@@ -517,7 +519,7 @@ export default function ScheduleScreen() {
               <View style={styles.legendLabels}>
                 <View style={styles.legendItem}>
                   <View
-                    style={[styles.legendDot, { backgroundColor: "#1E3A8A" }]}
+                    style={[styles.legendDot, { backgroundColor: theme.colors.primary }]}
                   />
                   <Text style={styles.legendText}>Taken</Text>
                 </View>
@@ -532,46 +534,13 @@ export default function ScheduleScreen() {
           </>
         )}
       </ScrollView>
-
-      {/* ── Bottom Nav ── */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/home")}
-        >
-          <Feather name="home" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/meds")} // 👈 route to meds.tsx
-        >
-          <Feather name="calendar" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Meds</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/ChatScreen")}
-        >
-          <Feather name="message-circle" size={20} color="#94A3B8" />
-          <Text style={styles.navText}>Chat</Text>
-        </TouchableOpacity>
-
-        {/* Schedule — active */}
-        <TouchableOpacity style={styles.navItem}>
-          <Feather name="bar-chart-2" size={20} color="#2563EB" />
-          <Text style={styles.navTextActive}>Schedule</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F1F5F9" },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
 
   // Header
   header: {
@@ -582,13 +551,13 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 10,
   },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: "#1E3A8A" },
-  headerSub: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  headerTitle: { fontSize: theme.typography.h1.fontSize, fontWeight: theme.typography.h1.fontWeight, color: theme.colors.primary },
+  headerSub: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 2 },
   headerIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -596,7 +565,7 @@ const styles = StyleSheet.create({
   // Tab toggle
   tabToggle: {
     flexDirection: "row",
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     borderRadius: 14,
     marginHorizontal: 20,
     marginBottom: 16,
@@ -611,9 +580,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 11,
   },
-  tabBtnActive: { backgroundColor: "#1E3A8A" },
-  tabBtnText: { fontSize: 13, fontWeight: "600", color: "#64748B" },
-  tabBtnTextActive: { color: "#fff" },
+  tabBtnActive: { backgroundColor: theme.colors.primary },
+  tabBtnText: { fontSize: 13, fontWeight: "600", color: theme.colors.text.secondary },
+  tabBtnTextActive: { color: theme.colors.surface },
 
   // Week strip
   weekStrip: {
@@ -626,19 +595,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 16,
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     minWidth: 54,
   },
-  dayPillActive: { backgroundColor: "#1E3A8A" },
-  dayText: { fontSize: 12, color: "#64748B", fontWeight: "500" },
-  dayTextActive: { color: "#fff" },
-  dateText: { fontSize: 16, fontWeight: "700", color: "#1E3A8A", marginTop: 2 },
-  dateTextActive: { color: "#fff" },
+  dayPillActive: { backgroundColor: theme.colors.primary },
+  dayText: { fontSize: 12, color: theme.colors.text.secondary, fontWeight: "500" },
+  dayTextActive: { color: theme.colors.surface },
+  dateText: { fontSize: 16, fontWeight: "700", color: theme.colors.primary, marginTop: 2 },
+  dateTextActive: { color: theme.colors.surface },
   activeDot: {
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: "#22C55E",
+    backgroundColor: theme.colors.successLight,
     marginTop: 3,
   },
 
@@ -649,14 +618,14 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 14,
     borderLeftWidth: 3,
-    borderLeftColor: "#2563EB",
+    borderLeftColor: theme.colors.primaryAccent,
     flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 4,
   },
   aiCardLeft: { flexDirection: "row", alignItems: "center", gap: 6, flex: 1 },
-  aiCardTitle: { fontSize: 13, fontWeight: "700", color: "#2563EB" },
+  aiCardTitle: { fontSize: 13, fontWeight: "700", color: theme.colors.primaryAccent },
   aiCardText: {
     fontSize: 12,
     color: "#1E40AF",
@@ -667,29 +636,26 @@ const styles = StyleSheet.create({
 
   // Progress
   progressCard: {
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 14,
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    ...theme.shadows.sm,
   },
   progressRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 10,
   },
-  progressLabel: { fontSize: 13, fontWeight: "600", color: "#1E3A8A" },
-  progressCount: { fontSize: 13, color: "#64748B" },
+  progressLabel: { fontSize: 13, fontWeight: "600", color: theme.colors.primary },
+  progressCount: { fontSize: 13, color: theme.colors.text.secondary },
   progressBg: {
     height: 8,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     borderRadius: 4,
     overflow: "hidden",
   },
-  progressFill: { height: 8, backgroundColor: "#1E3A8A", borderRadius: 4 },
+  progressFill: { height: 8, backgroundColor: theme.colors.primary, borderRadius: 4 },
 
   // Section label
   sectionLabelRow: {
@@ -702,16 +668,16 @@ const styles = StyleSheet.create({
   sectionTime: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: theme.colors.tabInactive,
     letterSpacing: 0.5,
   },
-  sectionCount: { fontSize: 11, color: "#94A3B8" },
+  sectionCount: { fontSize: 11, color: theme.colors.tabInactive },
 
   // Med row
   medRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
@@ -728,8 +694,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  medName: { fontSize: 14, fontWeight: "700", color: "#1E293B" },
-  medDose: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  medName: { fontSize: 14, fontWeight: "700", color: theme.colors.text.primary },
+  medDose: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 2 },
   checkCircle: {
     width: 30,
     height: 30,
@@ -739,18 +705,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  checkCircleDone: { backgroundColor: "#16A34A", borderColor: "#16A34A" },
+  checkCircleDone: { backgroundColor: theme.colors.success, borderColor: theme.colors.success },
 
   // Toggle card
   toggleCard: {
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     borderRadius: 20,
     padding: 16,
     marginTop: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    ...theme.shadows.sm,
   },
   toggleRow: {
     flexDirection: "row",
@@ -759,9 +722,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   toggleLeft: { flexDirection: "row", alignItems: "center" },
-  toggleTitle: { fontSize: 14, fontWeight: "600", color: "#1E293B" },
-  toggleSub: { fontSize: 12, color: "#94A3B8", marginTop: 1 },
-  divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 8 },
+  toggleTitle: { fontSize: 14, fontWeight: "600", color: theme.colors.text.primary },
+  toggleSub: { fontSize: 12, color: theme.colors.tabInactive, marginTop: 1 },
+  divider: { height: 1, backgroundColor: theme.colors.background, marginVertical: 8 },
 
   // Stats row
   statsRow: {
@@ -771,29 +734,23 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 14,
     alignItems: "center",
     gap: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 2,
+    ...theme.shadows.sm,
   },
-  statValue: { fontSize: 20, fontWeight: "800", color: "#1E3A8A" },
-  statLabel: { fontSize: 11, color: "#64748B" },
+  statValue: { fontSize: 20, fontWeight: "800", color: theme.colors.primary },
+  statLabel: { fontSize: 11, color: theme.colors.text.secondary },
 
   // Chart card
   chartCard: {
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     borderRadius: 20,
     padding: 18,
     marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    ...theme.shadows.sm,
   },
   chartHeader: {
     flexDirection: "row",
@@ -801,21 +758,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 4,
   },
-  chartTitle: { fontSize: 14, fontWeight: "700", color: "#1E293B" },
+  chartTitle: { fontSize: 14, fontWeight: "700", color: theme.colors.text.primary },
   trendBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#DCFCE7",
+    backgroundColor: theme.colors.successLight,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
     gap: 2,
   },
-  trendText: { fontSize: 11, color: "#16A34A", fontWeight: "600" },
+  trendText: { fontSize: 11, color: theme.colors.success, fontWeight: "600" },
   chartBig: {
     fontSize: 32,
     fontWeight: "800",
-    color: "#1E3A8A",
+    color: theme.colors.primary,
     marginBottom: 12,
   },
   barChartRow: {
@@ -828,13 +785,13 @@ const styles = StyleSheet.create({
   barBg: {
     width: 22,
     height: BAR_HEIGHT,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: theme.colors.background,
     borderRadius: 6,
     justifyContent: "flex-end",
     overflow: "hidden",
   },
   barFill: { width: "100%", borderRadius: 6 },
-  barLabel: { fontSize: 10, color: "#94A3B8", marginTop: 4 },
+  barLabel: { fontSize: 10, color: theme.colors.tabInactive, marginTop: 4 },
   chartDayLabels: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -842,7 +799,7 @@ const styles = StyleSheet.create({
   },
   chartDayLabel: {
     fontSize: 10,
-    color: "#94A3B8",
+    color: theme.colors.tabInactive,
     flex: 1,
     textAlign: "center",
   },
@@ -871,7 +828,7 @@ const styles = StyleSheet.create({
   insightTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#1E293B",
+    color: theme.colors.text.primary,
     marginBottom: 6,
   },
   insightText: {
@@ -894,14 +851,11 @@ const styles = StyleSheet.create({
 
   // Dose pattern
   patternCard: {
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    ...theme.shadows.sm,
   },
   patternHeaderRow: {
     flexDirection: "row",
@@ -909,14 +863,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
-  patternTitle: { fontSize: 14, fontWeight: "700", color: "#1E293B" },
+  patternTitle: { fontSize: 14, fontWeight: "700", color: theme.colors.text.primary },
   patternRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 10,
     gap: 10,
   },
-  patternSlot: { fontSize: 12, color: "#64748B", width: 70 },
+  patternSlot: { fontSize: 12, color: theme.colors.text.secondary, width: 70 },
   dotRow: { flexDirection: "row", gap: 6 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   legendRow: {
@@ -925,7 +879,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 70,
   },
-  legendDay: { fontSize: 10, color: "#94A3B8", textAlign: "center" },
+  legendDay: { fontSize: 10, color: theme.colors.tabInactive, textAlign: "center" },
   legendLabels: {
     flexDirection: "row",
     gap: 16,
@@ -934,27 +888,5 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 11, color: "#64748B" },
-
-  // Bottom nav
-  bottomNav: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
-  },
-  navItem: { alignItems: "center" },
-  navText: { fontSize: 11, color: "#94A3B8", marginTop: 4 },
-  navTextActive: {
-    fontSize: 11,
-    color: "#2563EB",
-    marginTop: 4,
-    fontWeight: "600",
-  },
+  legendText: { fontSize: 11, color: theme.colors.text.secondary },
 });

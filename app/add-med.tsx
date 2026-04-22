@@ -3,8 +3,7 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    Alert,
-    SafeAreaView,
+    Modal,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -12,8 +11,13 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    KeyboardAvoidingView,
+    Platform,
+    TouchableWithoutFeedback,
 } from "react-native";
-import { MedStore } from "./meds";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MedStore } from "./(tabs)/meds";
+import { theme, palette } from "../constants/theme";
 
 const ICON_OPTIONS = [
   { icon: "pill", label: "Pill" },
@@ -22,15 +26,17 @@ const ICON_OPTIONS = [
   { icon: "needle", label: "Injection" },
   { icon: "eyedrop", label: "Drops" },
   { icon: "bottle-tonic", label: "Syrup" },
+  { icon: "bandage", label: "Bandage" },
+  { icon: "flask-outline", label: "Liquid" },
 ];
 
 const COLOR_OPTIONS = [
-  { color: "#2563EB", bg: "#DBEAFE" },
-  { color: "#EA580C", bg: "#FFEDD5" },
+  { color: palette.primary.accent, bg: palette.primary.light },
+  { color: palette.secondary.main, bg: palette.secondary.light },
   { color: "#EAB308", bg: "#FEF9C3" },
-  { color: "#DC2626", bg: "#FEE2E2" },
+  { color: palette.danger.accent, bg: palette.danger.light },
   { color: "#7C3AED", bg: "#EDE9FE" },
-  { color: "#16A34A", bg: "#DCFCE7" },
+  { color: palette.success.main, bg: palette.success.light },
 ];
 
 export default function AddMedScreen() {
@@ -45,10 +51,14 @@ export default function AddMedScreen() {
   const [time, setTime] = useState("");
   const [selectedIcon, setSelectedIcon] = useState("pill");
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
+  
+  const [showError, setShowError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   function handleSave() {
     if (!name.trim() || !dose.trim() || !frequency.trim()) {
-      Alert.alert("Missing Info", "Please fill in Name, Dose and Frequency.");
+      setErrorMsg("Please fill in the required fields:\nMedicine Name, Dose and Frequency.");
+      setShowError(true);
       return;
     }
 
@@ -75,118 +85,160 @@ export default function AddMedScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F1F5F9" />
+      <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Feather name="x" size={20} color="#1E3A8A" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Medication</Text>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>Save</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        {/* Icon picker */}
-        <Text style={styles.sectionLabel}>Icon</Text>
-        <View style={styles.iconRow}>
-          {ICON_OPTIONS.map((opt) => (
-            <TouchableOpacity
-              key={opt.icon}
-              style={[
-                styles.iconOption,
-                { backgroundColor: selectedColor.bg },
-                selectedIcon === opt.icon && styles.iconOptionActive,
-              ]}
-              onPress={() => setSelectedIcon(opt.icon)}
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Feather name="x" size={20} color={theme.colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add Medication</Text>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+            <Text style={styles.saveBtnText}>Save</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Icon picker - Horizontal Scroll */}
+          <Text style={styles.sectionLabel}>Icon</Text>
+          <View>
+            <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.iconRow}
             >
-              <MaterialCommunityIcons
-                name={opt.icon as any}
-                size={22}
-                color={
-                  selectedIcon === opt.icon ? selectedColor.color : "#94A3B8"
-                }
+            {ICON_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                key={opt.icon}
+                style={[
+                    styles.iconOption,
+                    { backgroundColor: selectedColor.bg },
+                    selectedIcon === opt.icon && { borderColor: theme.colors.primary },
+                ]}
+                onPress={() => setSelectedIcon(opt.icon)}
+                >
+                <MaterialCommunityIcons
+                    name={opt.icon as any}
+                    size={22}
+                    color={
+                    selectedIcon === opt.icon ? selectedColor.color : theme.colors.tabInactive
+                    }
+                />
+                </TouchableOpacity>
+            ))}
+            </ScrollView>
+          </View>
+
+          {/* Color picker */}
+          <Text style={styles.sectionLabel}>Color</Text>
+          <View style={styles.colorRow}>
+            {COLOR_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.color}
+                style={[
+                  styles.colorDot,
+                  { backgroundColor: opt.color },
+                  selectedColor.color === opt.color && { borderColor: theme.colors.primary, borderWidth: 3 },
+                ]}
+                onPress={() => setSelectedColor(opt)}
               />
-            </TouchableOpacity>
-          ))}
-        </View>
+            ))}
+          </View>
 
-        {/* Color picker */}
-        <Text style={styles.sectionLabel}>Color</Text>
-        <View style={styles.colorRow}>
-          {COLOR_OPTIONS.map((opt) => (
-            <TouchableOpacity
-              key={opt.color}
-              style={[
-                styles.colorDot,
-                { backgroundColor: opt.color },
-                selectedColor.color === opt.color && styles.colorDotActive,
-              ]}
-              onPress={() => setSelectedColor(opt)}
+          {/* Fields */}
+          <Text style={styles.sectionLabel}>Details</Text>
+          <View style={styles.card}>
+            <Field
+              label="Medicine Name *"
+              placeholder="e.g. Metformin"
+              value={name}
+              onChangeText={setName}
             />
-          ))}
-        </View>
+            <Divider />
+            <Field
+              label="Dose *"
+              placeholder="e.g. 500mg"
+              value={dose}
+              onChangeText={setDose}
+            />
+            <Divider />
+            <Field
+              label="Type"
+              placeholder="e.g. Tablet, Capsule, Syrup"
+              value={type}
+              onChangeText={setType}
+            />
+            <Divider />
+            <Field
+              label="Dosage"
+              placeholder="e.g. 1 Tablet"
+              value={dosage}
+              onChangeText={setDosage}
+            />
+            <Divider />
+            <Field
+              label="Frequency *"
+              placeholder="e.g. 2x Daily, 1x Daily"
+              value={frequency}
+              onChangeText={setFrequency}
+            />
+            <Divider />
+            <Field
+              label="Duration"
+              placeholder="e.g. 90 Days Left"
+              value={duration}
+              onChangeText={setDuration}
+            />
+            <Divider />
+            <Field
+              label="Time & Instructions"
+              placeholder="e.g. 8:00 AM • After meal"
+              value={time}
+              onChangeText={setTime}
+            />
+          </View>
 
-        {/* Fields */}
-        <Text style={styles.sectionLabel}>Details</Text>
-        <View style={styles.card}>
-          <Field
-            label="Medicine Name *"
-            placeholder="e.g. Metformin"
-            value={name}
-            onChangeText={setName}
-          />
-          <Divider />
-          <Field
-            label="Dose *"
-            placeholder="e.g. 500mg"
-            value={dose}
-            onChangeText={setDose}
-          />
-          <Divider />
-          <Field
-            label="Type"
-            placeholder="e.g. Tablet, Capsule, Syrup"
-            value={type}
-            onChangeText={setType}
-          />
-          <Divider />
-          <Field
-            label="Dosage"
-            placeholder="e.g. 1 Tablet"
-            value={dosage}
-            onChangeText={setDosage}
-          />
-          <Divider />
-          <Field
-            label="Frequency *"
-            placeholder="e.g. 2x Daily, 1x Daily"
-            value={frequency}
-            onChangeText={setFrequency}
-          />
-          <Divider />
-          <Field
-            label="Duration"
-            placeholder="e.g. 90 Days Left"
-            value={duration}
-            onChangeText={setDuration}
-          />
-          <Divider />
-          <Field
-            label="Time & Instructions"
-            placeholder="e.g. 8:00 AM • After meal"
-            value={time}
-            onChangeText={setTime}
-          />
-        </View>
+          <Text style={styles.requiredNote}>* Required fields</Text>
+          {/* Spacer for bottom fields when keyboard is open */}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-        <Text style={styles.requiredNote}>* Required fields</Text>
-      </ScrollView>
+      {/* Themed Error Modal */}
+      <Modal
+        visible={showError}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowError(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowError(false)}>
+          <View style={styles.errorOverlay}>
+            <TouchableWithoutFeedback>
+                <View style={styles.errorCard}>
+                    <View style={styles.errorIconBg}>
+                        <Feather name="alert-circle" size={32} color={theme.colors.danger} />
+                    </View>
+                    <Text style={styles.errorTitle}>Missing Information</Text>
+                    <Text style={styles.errorText}>{errorMsg}</Text>
+                    <TouchableOpacity 
+                        style={styles.errorButton} 
+                        onPress={() => setShowError(false)}
+                    >
+                        <Text style={styles.errorButtonText}>Got it</Text>
+                    </TouchableOpacity>
+                </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -208,9 +260,10 @@ function Field({
       <TextInput
         style={styles.fieldInput}
         placeholder={placeholder}
-        placeholderTextColor="#CBD5E1"
+        placeholderTextColor={theme.colors.tabInactive}
         value={value}
         onChangeText={onChangeText}
+        autoCapitalize="sentences"
       />
     </View>
   );
@@ -221,7 +274,7 @@ function Divider() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F1F5F9" },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
 
   header: {
     flexDirection: "row",
@@ -234,62 +287,54 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "700", color: "#1E3A8A" },
+  headerTitle: { fontSize: 17, fontWeight: "700", color: theme.colors.primary },
   saveBtn: {
-    backgroundColor: "#1E3A8A",
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
   },
-  saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  saveBtnText: { color: theme.colors.surface, fontWeight: "700", fontSize: 14 },
 
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },
 
   sectionLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginTop: 24,
     marginBottom: 10,
   },
 
-  iconRow: { flexDirection: "row", gap: 10 },
+  iconRow: { flexDirection: "row", gap: 12, paddingRight: 20 },
   iconOption: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
+    width: 54,
+    height: 54,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "transparent",
   },
-  iconOptionActive: { borderColor: "#1E3A8A" },
 
   colorRow: { flexDirection: "row", gap: 12, alignItems: "center" },
   colorDot: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-  },
-  colorDotActive: {
-    borderWidth: 3,
-    borderColor: "#1E3A8A",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
 
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: theme.colors.surface,
     borderRadius: 20,
     paddingVertical: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    ...theme.shadows.sm,
   },
 
   fieldRow: {
@@ -298,26 +343,78 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: theme.colors.tabInactive,
     marginBottom: 4,
   },
   fieldInput: {
     fontSize: 14,
-    color: "#1E293B",
+    color: theme.colors.text.primary,
     fontWeight: "500",
     padding: 0,
   },
 
   divider: {
     height: 0.5,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     marginHorizontal: 16,
   },
 
   requiredNote: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: theme.colors.tabInactive,
     marginTop: 12,
     textAlign: "center",
+  },
+
+  // Error Modal Styles
+  errorOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorCard: {
+    width: "100%",
+    backgroundColor: theme.colors.surface,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    ...theme.shadows.md,
+  },
+  errorIconBg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: theme.colors.dangerLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: theme.colors.primary,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: theme.colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  errorButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 16,
+    width: "100%",
+    alignItems: "center",
+  },
+  errorButtonText: {
+    color: theme.colors.surface,
+    fontWeight: "700",
+    fontSize: 15,
   },
 });

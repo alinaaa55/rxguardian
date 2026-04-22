@@ -3,7 +3,6 @@ import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    SafeAreaView,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -12,6 +11,8 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "../constants/theme";
 
 const INITIAL_PROFILE = {
   name: "Ayaan Khan",
@@ -37,12 +38,12 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F1F5F9" />
+      <StatusBar barStyle="dark-content" />
 
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color="#1E3A8A" />
+          <Ionicons name="chevron-back" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>My Profile</Text>
@@ -54,7 +55,7 @@ export default function ProfileScreen() {
           <Feather
             name={isEditing ? "check" : "edit-2"}
             size={18}
-            color="#2563EB"
+            color={theme.colors.primaryAccent}
           />
         </TouchableOpacity>
       </View>
@@ -93,7 +94,7 @@ export default function ProfileScreen() {
             <InfoRow
               label="Email"
               value={profile.email}
-              icon={<Feather name="mail" size={16} color="#2563EB" />}
+              icon={<Feather name="mail" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
               onChange={(v) => handleChange("email", v)}
             />
@@ -101,7 +102,7 @@ export default function ProfileScreen() {
             <InfoRow
               label="Phone"
               value={profile.phone}
-              icon={<Feather name="phone" size={16} color="#2563EB" />}
+              icon={<Feather name="phone" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
               onChange={(v) => handleChange("phone", v)}
             />
@@ -109,7 +110,7 @@ export default function ProfileScreen() {
             <InfoRow
               label="Date of Birth"
               value={profile.dob}
-              icon={<Feather name="calendar" size={16} color="#2563EB" />}
+              icon={<Feather name="calendar" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
               onChange={(v) => handleChange("dob", v)}
             />
@@ -125,7 +126,7 @@ export default function ProfileScreen() {
               label="Blood Group"
               value={profile.bloodGroup}
               icon={
-                <MaterialIcons name="bloodtype" size={16} color="#DC2626" />
+                <MaterialIcons name="bloodtype" size={16} color={theme.colors.danger} />
               }
               highlight
               editable={isEditing}
@@ -135,7 +136,7 @@ export default function ProfileScreen() {
             <InfoRow
               label="Allergies"
               value={profile.allergies}
-              icon={<MaterialIcons name="warning" size={16} color="#EA580C" />}
+              icon={<MaterialIcons name="warning" size={16} color={theme.colors.secondary} />}
               editable={isEditing}
               onChange={(v) => handleChange("allergies", v)}
             />
@@ -143,7 +144,7 @@ export default function ProfileScreen() {
             <InfoRow
               label="Primary Doctor"
               value={profile.doctor}
-              icon={<Feather name="user" size={16} color="#2563EB" />}
+              icon={<Feather name="user" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
               onChange={(v) => handleChange("doctor", v)}
             />
@@ -151,7 +152,7 @@ export default function ProfileScreen() {
             <InfoRow
               label="Hospital"
               value={profile.hospital}
-              icon={<Feather name="map-pin" size={16} color="#2563EB" />}
+              icon={<Feather name="map-pin" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
               onChange={(v) => handleChange("hospital", v)}
             />
@@ -160,7 +161,7 @@ export default function ProfileScreen() {
 
         {/* SIGN OUT */}
         <TouchableOpacity style={styles.signOutBtn}>
-          <Feather name="log-out" size={16} color="#DC2626" />
+          <Feather name="log-out" size={16} color={theme.colors.danger} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -196,11 +197,12 @@ function Divider() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F1F5F9" },
+  safeArea: { flex: 1, backgroundColor: theme.colors.background },
 
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     padding: 16,
   },
 
@@ -208,7 +210,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -217,12 +219,12 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#DBEAFE",
+    backgroundColor: theme.colors.primaryLight,
     alignItems: "center",
     justifyContent: "center",
   },
 
-  headerTitle: { fontSize: 17, fontWeight: "700", color: "#1E3A8A" },
+  headerTitle: { fontSize: theme.typography.h2.fontSize, fontWeight: theme.typography.h2.fontWeight, color: theme.colors.primary },
 
   avatarSection: { alignItems: "center", paddingVertical: 28 },
 
@@ -230,7 +232,7 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: "#1E3A8A",
+    backgroundColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
@@ -242,53 +244,57 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: "#22C55E",
+    backgroundColor: theme.colors.successLight,
     position: "absolute",
     bottom: 4,
     right: 4,
   },
 
-  profileName: { fontSize: 20, fontWeight: "700" },
-  profileSub: { fontSize: 13, color: "#64748B" },
+  profileName: { fontSize: 20, fontWeight: "700", color: theme.colors.text.primary },
+  profileSub: { fontSize: 13, color: theme.colors.text.secondary },
 
   section: { paddingHorizontal: 20, marginBottom: 20 },
-  sectionTitle: { fontSize: 13, color: "#64748B", marginBottom: 10 },
+  sectionTitle: { fontSize: 13, color: theme.colors.text.secondary, marginBottom: 10 },
 
-  card: { backgroundColor: "white", borderRadius: 20 },
+  card: { backgroundColor: theme.colors.surface, borderRadius: 20, ...theme.shadows.sm },
 
   infoRow: { flexDirection: "row", padding: 14 },
 
   infoIcon: {
     width: 32,
     height: 32,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: theme.colors.background,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+    borderRadius: 8,
   },
 
-  infoLabel: { fontSize: 11, color: "#94A3B8" },
-  infoValue: { fontSize: 14, fontWeight: "500" },
+  infoLabel: { fontSize: 11, color: theme.colors.tabInactive },
+  infoValue: { fontSize: 14, fontWeight: "500", color: theme.colors.text.primary },
 
-  highlightValue: { color: "#DC2626" },
+  highlightValue: { color: theme.colors.danger },
 
-  divider: { height: 0.5, backgroundColor: "#E2E8F0" },
+  divider: { height: 0.5, backgroundColor: theme.colors.border },
 
   input: {
     borderBottomWidth: 1,
-    borderColor: "#CBD5F5",
+    borderColor: theme.colors.primaryLight,
     fontSize: 14,
     paddingVertical: 2,
+    color: theme.colors.text.primary,
   },
 
   signOutBtn: {
     flexDirection: "row",
     justifyContent: "center",
+    alignItems: "center",
     padding: 14,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: theme.colors.dangerLight,
     margin: 20,
     borderRadius: 20,
+    gap: 8,
   },
 
-  signOutText: { color: "#DC2626", fontWeight: "600" },
+  signOutText: { color: theme.colors.danger, fontWeight: "600" },
 });

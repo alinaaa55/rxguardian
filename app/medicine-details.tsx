@@ -1,19 +1,31 @@
+// app/medicine-details.tsx
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import {
-  SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { theme } from "../constants/theme";
 
 export default function MedicineDetails() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+
+  const name = (params.name as string) || "Metformin";
+  const dose = (params.dose as string) || "500mg";
+  const type = (params.type as string) || "Oral Tablet";
+  const dosage = (params.dosage as string) || "1 Tablet";
+  const frequency = (params.frequency as string) || "2x Daily";
+  const duration = (params.duration as string) || "90 Days Left";
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContainer}
@@ -24,13 +36,13 @@ export default function MedicineDetails() {
             style={styles.iconBtn}
             onPress={() => router.back()}
           >
-            <Feather name="arrow-left" size={20} color="#1E3A8A" />
+            <Feather name="arrow-left" size={20} color={theme.colors.primary} />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>DETAILS</Text>
 
           <TouchableOpacity style={styles.iconBtn}>
-            <Feather name="edit-2" size={18} color="#1E3A8A" />
+            <Feather name="edit-2" size={18} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -40,32 +52,32 @@ export default function MedicineDetails() {
             <Text style={styles.aiText}>AI VERIFIED</Text>
           </View>
 
-          <Text style={styles.medTitle}>Metformin</Text>
-          <Text style={styles.subtitle}>500mg • Oral Tablet</Text>
+          <Text style={styles.medTitle}>{name}</Text>
+          <Text style={styles.subtitle}>{dose} • {type}</Text>
         </View>
 
         {/* DOSAGE + FREQUENCY */}
         <View style={styles.row}>
           <View style={styles.card}>
-            <Feather name="link" size={20} color="#2563EB" />
+            <Feather name="link" size={20} color={theme.colors.primaryAccent} />
             <Text style={styles.cardLabel}>Dosage</Text>
-            <Text style={styles.cardValue}>1 Tablet</Text>
+            <Text style={styles.cardValue}>{dosage}</Text>
           </View>
 
           <View style={styles.card}>
             <Feather name="clock" size={20} color="#9333EA" />
             <Text style={styles.cardLabel}>Frequency</Text>
-            <Text style={styles.cardValue}>2x Daily</Text>
+            <Text style={styles.cardValue}>{frequency}</Text>
           </View>
         </View>
 
         {/* DURATION */}
         <View style={styles.durationCard}>
           <View style={styles.durationLeft}>
-            <MaterialCommunityIcons name="calendar" size={22} color="#F97316" />
+            <MaterialCommunityIcons name="calendar" size={22} color={theme.colors.secondary} />
             <View style={{ marginLeft: 10 }}>
               <Text style={styles.cardLabel}>Duration</Text>
-              <Text style={styles.cardValue}>90 Days Left</Text>
+              <Text style={styles.cardValue}>{duration}</Text>
             </View>
           </View>
 
@@ -91,9 +103,9 @@ export default function MedicineDetails() {
 
         {/* SIDE EFFECTS */}
         <TouchableOpacity style={styles.sideCard}>
-          <Ionicons name="warning-outline" size={22} color="#EF4444" />
+          <Ionicons name="warning-outline" size={22} color={theme.colors.danger} />
           <Text style={styles.sideText}>Side Effects</Text>
-          <Feather name="chevron-down" size={20} color="#64748B" />
+          <Feather name="chevron-down" size={20} color={theme.colors.tabInactive} />
         </TouchableOpacity>
 
         {/* NOTE */}
@@ -125,7 +137,7 @@ export default function MedicineDetails() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: theme.colors.background,
   },
 
   scrollContainer: {
@@ -142,7 +154,7 @@ const styles = StyleSheet.create({
 
   headerTitle: {
     fontWeight: "700",
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     letterSpacing: 1,
   },
 
@@ -150,7 +162,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -160,7 +172,7 @@ const styles = StyleSheet.create({
   },
 
   aiBadge: {
-    backgroundColor: "#DBEAFE",
+    backgroundColor: theme.colors.primaryLight,
     alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -169,7 +181,7 @@ const styles = StyleSheet.create({
 
   aiText: {
     fontSize: 11,
-    color: "#2563EB",
+    color: theme.colors.primaryAccent,
     fontWeight: "600",
   },
 
@@ -177,11 +189,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "800",
     marginTop: 10,
-    color: "#1F2937",
+    color: theme.colors.text.primary,
   },
 
   subtitle: {
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     marginTop: 4,
   },
 
@@ -193,19 +205,16 @@ const styles = StyleSheet.create({
 
   card: {
     width: "48%",
-    backgroundColor: "white",
+    backgroundColor: theme.colors.surface,
     padding: 20,
     borderRadius: 22,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    ...theme.shadows.sm,
   },
 
   cardLabel: {
     fontSize: 12,
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     marginTop: 6,
   },
 
@@ -216,13 +225,14 @@ const styles = StyleSheet.create({
   },
 
   durationCard: {
-    backgroundColor: "white",
+    backgroundColor: theme.colors.surface,
     borderRadius: 22,
     padding: 20,
     marginTop: 20,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    ...theme.shadows.sm,
   },
 
   durationLeft: {
@@ -235,7 +245,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     borderWidth: 4,
-    borderColor: "#F97316",
+    borderColor: theme.colors.secondary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -246,16 +256,18 @@ const styles = StyleSheet.create({
   },
 
   interactionCard: {
-    backgroundColor: "white",
+    backgroundColor: theme.colors.surface,
     borderRadius: 22,
     padding: 20,
     marginTop: 20,
     alignItems: "center",
+    ...theme.shadows.sm,
   },
 
   sectionTitle: {
     fontWeight: "700",
     alignSelf: "flex-start",
+    color: theme.colors.text.primary,
   },
 
   riskMeter: {
@@ -264,7 +276,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 110,
     borderTopRightRadius: 110,
     borderWidth: 12,
-    borderColor: "#10B981",
+    borderColor: theme.colors.success,
     borderBottomWidth: 0,
     marginTop: 20,
   },
@@ -272,21 +284,21 @@ const styles = StyleSheet.create({
   riskNeedle: {
     width: 90,
     height: 3,
-    backgroundColor: "#1F2937",
+    backgroundColor: theme.colors.text.primary,
     position: "absolute",
     bottom: 0,
     transform: [{ rotate: "-30deg" }],
   },
 
   lowRisk: {
-    color: "#10B981",
+    color: theme.colors.success,
     fontWeight: "700",
     marginTop: 10,
     fontSize: 15,
   },
 
   riskText: {
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     fontSize: 12,
     textAlign: "center",
     marginTop: 4,
@@ -295,10 +307,11 @@ const styles = StyleSheet.create({
   sideCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
+    backgroundColor: theme.colors.surface,
     padding: 18,
     borderRadius: 22,
     marginTop: 20,
+    ...theme.shadows.sm,
   },
 
   sideText: {
@@ -306,11 +319,12 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontWeight: "600",
     fontSize: 15,
+    color: theme.colors.text.primary,
   },
 
   noteBox: {
     borderWidth: 1,
-    borderColor: "#CBD5F5",
+    borderColor: theme.colors.border,
     borderRadius: 16,
     padding: 16,
     marginTop: 20,
@@ -318,7 +332,7 @@ const styles = StyleSheet.create({
 
   noteText: {
     fontSize: 12,
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     textAlign: "center",
     fontStyle: "italic",
   },
@@ -333,7 +347,7 @@ const styles = StyleSheet.create({
   },
 
   refillBtn: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     paddingVertical: 16,
     paddingHorizontal: 30,
     borderRadius: 24,
@@ -341,10 +355,11 @@ const styles = StyleSheet.create({
 
   refillText: {
     fontWeight: "600",
+    color: theme.colors.text.primary,
   },
 
   takenBtn: {
-    backgroundColor: "#1E3A8A",
+    backgroundColor: theme.colors.primary,
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 16,

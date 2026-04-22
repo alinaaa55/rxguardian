@@ -1,8 +1,7 @@
-// app/home.tsx
+// app/(tabs)/index.tsx
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -10,7 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import BottomNav from "../components/BottomNav";
+import { theme } from "../../constants/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ─── Dynamic greeting helpers ─────────────────────────────────────────────────
 function getGreeting(): string {
@@ -31,10 +31,11 @@ function getDynamicDate(): string {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F1F5F9" />
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.background }]}>
+      <StatusBar barStyle="dark-content" />
 
       <View style={styles.contentWrapper}>
         <ScrollView
@@ -52,7 +53,7 @@ export default function HomeScreen() {
                 style={styles.avatar}
                 onPress={() => router.push("/profile")}
               >
-                <Feather name="user" size={20} color="#1E3A8A" />
+                <Feather name="user" size={20} color={theme.colors.primary} />
                 <View style={styles.onlineDot} />
               </TouchableOpacity>
             </View>
@@ -98,7 +99,7 @@ export default function HomeScreen() {
             }
           >
             <View style={styles.iconCircleBlue}>
-              <Feather name="activity" size={20} color="#2563EB" />
+              <Feather name="activity" size={20} color={theme.colors.primaryAccent} />
             </View>
 
             <View style={{ flex: 1 }}>
@@ -109,7 +110,7 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.takenBadge}>
-              <Feather name="check-circle" size={14} color="#15803D" />
+              <Feather name="check-circle" size={14} color={theme.colors.success} />
               <Text style={styles.takenText}>Taken</Text>
             </View>
           </TouchableOpacity>
@@ -132,7 +133,7 @@ export default function HomeScreen() {
             }
           >
             <View style={styles.iconCircleOrange}>
-              <Feather name="plus-square" size={20} color="#EA580C" />
+              <Feather name="plus-square" size={20} color={theme.colors.secondary} />
             </View>
 
             <View style={{ flex: 1 }}>
@@ -141,14 +142,14 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.pendingBadge}>
-              <Ionicons name="time-outline" size={14} color="#64748B" />
+              <Ionicons name="time-outline" size={14} color={theme.colors.text.secondary} />
               <Text style={styles.pendingText}>Pending</Text>
             </View>
           </TouchableOpacity>
 
           {/* ALERT */}
           <View style={styles.alertCard}>
-            <MaterialIcons name="warning" size={22} color="#DC2626" />
+            <MaterialIcons name="warning" size={22} color={theme.colors.danger} />
 
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={styles.alertTitle}>Interaction Alert</Text>
@@ -161,17 +162,13 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
       </View>
-
-      {/* SHARED BOTTOM NAV (includes FAB) */}
-      <BottomNav />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
   },
 
   contentWrapper: {
@@ -184,7 +181,7 @@ const styles = StyleSheet.create({
   },
 
   date: {
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     fontSize: 13,
   },
 
@@ -196,16 +193,16 @@ const styles = StyleSheet.create({
   },
 
   greeting: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#1E3A8A",
+    fontSize: theme.typography.h1.fontSize,
+    fontWeight: theme.typography.h1.fontWeight,
+    color: theme.colors.primary,
   },
 
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -214,22 +211,19 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#22C55E",
+    backgroundColor: theme.colors.successLight,
     position: "absolute",
     bottom: 3,
     right: 3,
   },
 
   adherenceCard: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     borderRadius: 24,
     padding: 25,
     marginTop: 25,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    ...theme.shadows.sm,
   },
 
   circleOuter: {
@@ -237,7 +231,7 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 80,
     borderWidth: 12,
-    borderColor: "#1E3A8A",
+    borderColor: theme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -249,7 +243,7 @@ const styles = StyleSheet.create({
 
   adherenceText: {
     fontSize: 12,
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     marginTop: 4,
   },
 
@@ -261,7 +255,7 @@ const styles = StyleSheet.create({
 
   subText: {
     textAlign: "center",
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     marginTop: 6,
     lineHeight: 18,
   },
@@ -274,33 +268,30 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: theme.typography.h2.fontSize,
+    fontWeight: theme.typography.h2.fontWeight,
   },
 
   seeAll: {
-    color: "#2563EB",
+    color: theme.colors.primaryAccent,
     fontWeight: "500",
   },
 
   medicineCard: {
-    backgroundColor: "white",
+    backgroundColor: theme.colors.surface,
     borderRadius: 20,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     marginTop: 15,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    ...theme.shadows.sm,
   },
 
   iconCircleBlue: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#DBEAFE",
+    backgroundColor: theme.colors.primaryLight,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 14,
@@ -310,7 +301,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#FFEDD5",
+    backgroundColor: theme.colors.secondaryLight,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 14,
@@ -323,14 +314,14 @@ const styles = StyleSheet.create({
 
   medDetails: {
     fontSize: 12,
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     marginTop: 3,
   },
 
   takenBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#DCFCE7",
+    backgroundColor: theme.colors.successLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -339,14 +330,14 @@ const styles = StyleSheet.create({
   takenText: {
     marginLeft: 5,
     fontSize: 12,
-    color: "#15803D",
+    color: theme.colors.success,
     fontWeight: "600",
   },
 
   pendingBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E2E8F0",
+    backgroundColor: theme.colors.border,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -355,13 +346,13 @@ const styles = StyleSheet.create({
   pendingText: {
     marginLeft: 5,
     fontSize: 12,
-    color: "#64748B",
+    color: theme.colors.text.secondary,
     fontWeight: "600",
   },
 
   alertCard: {
     flexDirection: "row",
-    backgroundColor: "#FEE2E2",
+    backgroundColor: theme.colors.dangerLight,
     padding: 18,
     borderRadius: 20,
     marginTop: 25,
@@ -369,12 +360,12 @@ const styles = StyleSheet.create({
 
   alertTitle: {
     fontWeight: "700",
-    color: "#B91C1C",
+    color: theme.colors.danger,
   },
 
   alertText: {
     fontSize: 12,
-    color: "#7F1D1D",
+    color: theme.colors.danger,
     marginTop: 5,
     lineHeight: 17,
   },
