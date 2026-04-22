@@ -4,7 +4,6 @@ import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-
 import {
   ActivityIndicator,
   Alert,
@@ -13,11 +12,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
-// ✅ CHANGE THIS to your PC IP
 const API_BASE = "http://192.168.1.5:8000";
 
 export default function ScanScreen() {
@@ -32,12 +31,29 @@ export default function ScanScreen() {
   const [result, setResult] = useState<any>(null);
   const [showResult, setShowResult] = useState(false);
 
-  // ✅ AUTO OPEN CAMERA
+  // Editable fields
+  const [medicineName, setMedicineName] = useState("");
+  const [dosage, setDosage] = useState("");
+  const [form, setForm] = useState("");
+  const [frequency, setFrequency] = useState("");
+  const [confidence, setConfidence] = useState<number | null>(null);
+  const [sourceFile, setSourceFile] = useState("Scanned_Rx_001.jpg");
+
   useEffect(() => {
     handleOpenCamera();
   }, []);
 
-  // ── CAMERA PERMISSION + OPEN ──
+  // Populate fields when result arrives
+  useEffect(() => {
+    if (result) {
+      setMedicineName(result.medicine_name ?? result.name ?? "");
+      setDosage(result.dosage ?? "");
+      setForm(result.form ?? result.drug_form ?? "");
+      setFrequency(result.frequency ?? "");
+      setConfidence(result.confidence ?? result.match_score ?? null);
+    }
+  }, [result]);
+
   const handleOpenCamera = async () => {
     if (!permission?.granted) {
       const res = await requestPermission();
@@ -49,18 +65,23 @@ export default function ScanScreen() {
     setShowCamera(true);
   };
 
-  // ── CAPTURE ──
   const handleCapture = async () => {
     if (!cameraRef.current || capturing) return;
 
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-      });
-
+      await cameraRef.current.takePictureAsync({ quality: 0.8 });
       setShowCamera(false);
-      await sendToAPI(photo.uri);
+
+      // ── MOCK DATA for UI testing ──
+      setResult({
+        medicine_name: "Amoxicillin",
+        dosage: "500mg",
+        form: "Tablet",
+        frequency: "Twice daily",
+        confidence: 0.92,
+      });
+      setShowResult(true);
     } catch {
       Alert.alert("Error", "Failed to capture image");
     } finally {
@@ -68,45 +89,38 @@ export default function ScanScreen() {
     }
   };
 
-  // ── GALLERY ──
   const handleGallery = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
       Alert.alert("Permission needed", "Allow gallery access");
       return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const picked = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.8,
     });
-
-    if (!result.canceled) {
-      await sendToAPI(result.assets[0].uri);
+    if (!picked.canceled) {
+      const uri = picked.assets[0].uri;
+      const filename = uri.split("/").pop() ?? "image.jpg";
+      setSourceFile(filename);
+      await sendToAPI(uri);
     }
   };
 
-  // ── API ──
   const sendToAPI = async (uri: string) => {
     setLoading(true);
-
     try {
       const formData = new FormData();
-
       formData.append("file", {
         uri,
         type: "image/jpeg",
         name: "image.jpg",
       } as any);
-
       const res = await fetch(`${API_BASE}/prescriptions/parse-image`, {
         method: "POST",
         body: formData,
       });
-
       const data = await res.json();
-
       setResult(data);
       setShowResult(true);
     } catch {
@@ -116,7 +130,21 @@ export default function ScanScreen() {
     }
   };
 
-  // ═════════ CAMERA SCREEN ═════════
+  const handleConfirm = () => {
+    const confirmed = { medicine_name: medicineName, dosage, form, frequency };
+    console.log("Confirmed:", confirmed);
+    // TODO: save to your backend/state
+    setShowResult(false);
+    router.replace("/home");
+  };
+
+  const handleRescan = () => {
+    setShowResult(false);
+    setResult(null);
+    handleOpenCamera();
+  };
+
+  // ── CAMERA SCREEN ──
   if (showCamera) {
     return (
       <View style={styles.cameraContainer}>
@@ -126,34 +154,30 @@ export default function ScanScreen() {
           facing="back"
         />
 
-        {/* TOP BAR */}
         <SafeAreaView style={styles.cameraTopBar}>
           <TouchableOpacity
             style={styles.circleBtn}
             onPress={() => {
               setShowCamera(false);
-              router.replace("/home"); // ✅ ALWAYS GO HOME
+              router.replace("/home");
             }}
           >
             <Feather name="x" size={20} color="white" />
           </TouchableOpacity>
         </SafeAreaView>
 
-        {/* SCANNER FRAME */}
         <View style={styles.frameContainer}>
           <View style={styles.frame}>
             <View style={styles.cornerTL} />
             <View style={styles.cornerTR} />
             <View style={styles.cornerBL} />
             <View style={styles.cornerBR} />
-
             <Text style={styles.frameText}>
               Align prescription within the frame
             </Text>
           </View>
         </View>
 
-        {/* BOTTOM BAR */}
         <View style={styles.bottomBar}>
           <TouchableOpacity style={styles.bottomItem} onPress={handleGallery}>
             <MaterialCommunityIcons
@@ -179,7 +203,7 @@ export default function ScanScreen() {
     );
   }
 
-  // ═════════ LOADING SCREEN ═════════
+  // ── LOADING + RESULT ──
   return (
     <LinearGradient colors={["#020617", "#0B1B34"]} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1, justifyContent: "center" }}>
@@ -191,29 +215,121 @@ export default function ScanScreen() {
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color="#22c55e" />
-          <Text style={{ color: "white" }}>Processing...</Text>
+          <Text style={{ color: "white", marginTop: 12 }}>Processing...</Text>
         </View>
       )}
 
-      {/* RESULT MODAL */}
+      {/* ── VERIFY DETAILS MODAL ── */}
       <Modal visible={showResult} transparent animationType="slide">
-        <View style={styles.modal}>
-          <View style={styles.card}>
-            <Text style={{ fontSize: 18, fontWeight: "600" }}>Scan Result</Text>
+        <View style={styles.modalBackdrop}>
+          {/* Tap outside to dismiss */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowResult(false)}
+            activeOpacity={1}
+          />
 
-            <ScrollView>
-              <Text>{JSON.stringify(result, null, 2)}</Text>
+          <View style={styles.sheet}>
+            {/* Handle */}
+            <View style={styles.handle} />
+
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Verify Details</Text>
+                <Text style={styles.sheetSubtitle}>
+                  Review extracted information
+                </Text>
+              </View>
+              {confidence !== null && (
+                <View style={styles.badge}>
+                  <View style={styles.badgeDot} />
+                  <Text style={styles.badgeText}>
+                    {Math.round(confidence * 100)}% Match
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Source row */}
+              <View style={styles.sourceRow}>
+                <View style={styles.sourceThumb} />
+                <View>
+                  <Text style={styles.label}>SOURCE</Text>
+                  <Text style={styles.sourceFile}>{sourceFile}</Text>
+                  <Text style={styles.viewOriginal}>View Original</Text>
+                </View>
+              </View>
+
+              {/* Medicine name */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>MEDICINE NAME</Text>
+                <View style={styles.inputRow}>
+                  <TextInput
+                    style={styles.inputFlex}
+                    value={medicineName}
+                    onChangeText={setMedicineName}
+                    placeholder="Enter medicine name"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  <View style={styles.pillBadge}>
+                    <Feather name="edit-2" size={11} color="#185FA5" />
+                  </View>
+                </View>
+              </View>
+
+              {/* Dosage + Form */}
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>DOSAGE</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={dosage}
+                    onChangeText={setDosage}
+                    placeholder="e.g. 500mg"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>FORM</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={form}
+                    onChangeText={setForm}
+                    placeholder="e.g. Tablet"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+              </View>
+
+              {/* Frequency */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.label}>FREQUENCY</Text>
+                <TextInput
+                  style={styles.input}
+                  value={frequency}
+                  onChangeText={setFrequency}
+                  placeholder="e.g. Twice daily"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+
+              {/* Confirm */}
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={handleConfirm}
+              >
+                <Text style={styles.confirmText}>Confirm & Save →</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleRescan}
+                style={{ paddingVertical: 12 }}
+              >
+                <Text style={styles.rescanText}>Rescan Document</Text>
+              </TouchableOpacity>
             </ScrollView>
-
-            <TouchableOpacity
-              style={styles.btn}
-              onPress={() => {
-                setShowResult(false);
-                router.replace("/home"); // ✅ GO BACK TO HOME
-              }}
-            >
-              <Text style={{ color: "white" }}>Done</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -221,15 +337,10 @@ export default function ScanScreen() {
   );
 }
 
-// ─── STYLES ───
 const styles = StyleSheet.create({
+  // ── camera ──
   cameraContainer: { flex: 1, backgroundColor: "#000" },
-
-  cameraTopBar: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-  },
-
+  cameraTopBar: { paddingHorizontal: 20, marginTop: 10 },
   circleBtn: {
     width: 40,
     height: 40,
@@ -238,7 +349,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   frameContainer: {
     position: "absolute",
     top: 0,
@@ -248,7 +358,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   frame: {
     width: 320,
     height: 360,
@@ -259,12 +368,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingBottom: 20,
   },
-
-  frameText: {
-    color: "#E5E7EB",
-    fontSize: 14,
-  },
-
+  frameText: { color: "#E5E7EB", fontSize: 14 },
   cornerTL: {
     position: "absolute",
     top: 16,
@@ -305,7 +409,6 @@ const styles = StyleSheet.create({
     borderRightWidth: 3,
     borderColor: "white",
   },
-
   bottomBar: {
     position: "absolute",
     bottom: 0,
@@ -316,11 +419,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
   },
-
   bottomItem: { alignItems: "center" },
-
   bottomText: { color: "#9CA3AF", fontSize: 12 },
-
   captureOuter: {
     width: 80,
     height: 80,
@@ -330,7 +430,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
   captureInner: {
     width: 60,
     height: 60,
@@ -338,6 +437,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
   },
 
+  // ── loading ──
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.7)",
@@ -345,25 +445,126 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  modal: {
+  // ── bottom sheet ──
+  modalBackdrop: {
     flex: 1,
-    justifyContent: "flex-end",
     backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
-
-  card: {
-    backgroundColor: "white",
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
+  sheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 34,
+    paddingTop: 12,
+    maxHeight: "88%",
   },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#E5E7EB",
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: "600", color: "#111827" },
+  sheetSubtitle: { fontSize: 13, color: "#6B7280", marginTop: 2 },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#DCFCE7",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  badgeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#16A34A",
+  },
+  badgeText: { fontSize: 12, color: "#15803D", fontWeight: "500" },
 
-  btn: {
-    backgroundColor: "#1E3A8A",
-    padding: 14,
+  // source
+  sourceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F9FAFB",
     borderRadius: 10,
-    marginTop: 10,
+    padding: 10,
+    marginBottom: 16,
+  },
+  sourceThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#E5E7EB",
+  },
+  sourceFile: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#111827",
+    marginTop: 2,
+  },
+  viewOriginal: { fontSize: 12, color: "#1D4ED8", marginTop: 2 },
+
+  // fields
+  fieldGroup: { marginBottom: 14 },
+  label: {
+    fontSize: 10,
+    letterSpacing: 0.8,
+    color: "#9CA3AF",
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  inputFlex: { flex: 1, fontSize: 15, fontWeight: "500", color: "#111827" },
+  pillBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
     alignItems: "center",
   },
+  row: { flexDirection: "row", gap: 12, marginBottom: 14 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#111827",
+  },
+
+  // buttons
+  confirmBtn: {
+    backgroundColor: "#1E3A8A",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  confirmText: { color: "white", fontSize: 15, fontWeight: "600" },
+  rescanText: { textAlign: "center", fontSize: 13, color: "#1D4ED8" },
 });
