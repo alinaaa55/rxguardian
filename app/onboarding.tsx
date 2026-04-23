@@ -1,308 +1,208 @@
-import { Feather } from "@expo/vector-icons";
+import React, { useRef, useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from "react-native";
+import PagerView from "react-native-pager-view";
 import { LinearGradient } from "expo-linear-gradient";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useRef, useState } from "react";
-import {
-  Dimensions,
-  FlatList,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import Animated, {
-  Extrapolate,
-  interpolate,
-  runOnJS,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Image } from "expo-image";
+import { storage } from "../services/storage";
+import { theme } from "../constants/theme";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 
-const DATA = [
+const ONBOARDING_DATA = [
   {
-    id: "1",
-    title: "Scan Any",
-    highlight: "Prescription",
-    description:
-      "Snap a photo of your handwritten script. AI decodes it instantly.",
-    buttonText: "Next",
+    title: "Schedule Your Medications",
+    description: "Keep track of your health with ease. Set reminders for your pills and never miss a dose again.",
+    image: require("../assets/onboarding-1.svg"),
   },
   {
-    id: "2",
-    title: "Safety",
-    highlight: "First",
-    description: "Detect dangerous drug interactions before they harm you.",
-    buttonText: "Next",
+    title: "AI Analysis Support",
+    description: "Scan your prescriptions or search for medications. Get detailed insights and safety alerts powered by AI.",
+    image: require("../assets/onboarding-2.svg"),
   },
   {
-    id: "3",
-    title: "Never Miss",
-    highlight: "a Dose",
-    description: "Smart reminders and tracking keep your health on track.",
-    buttonText: "Get Started",
+    title: "Stay Healthy Always",
+    description: "Manage your medical records and stay connected with your healthcare providers for a better life.",
+    image: require("../assets/onboarding-3.svg"),
   },
 ];
 
-const PaginationDot = ({ index, scrollX }: any) => {
-  const style = useAnimatedStyle(() => {
-    const inputRange = [
-      (index - 1) * width,
-      index * width,
-      (index + 1) * width,
-    ];
-
-    return {
-      width: interpolate(
-        scrollX.value,
-        inputRange,
-        [8, 24, 8],
-        Extrapolate.CLAMP,
-      ),
-      opacity: interpolate(
-        scrollX.value,
-        inputRange,
-        [0.3, 1, 0.3],
-        Extrapolate.CLAMP,
-      ),
-    };
-  });
-
-  return <Animated.View style={[styles.dot, style]} />;
-};
-
-export default function OnboardingPager() {
+export default function OnboardingScreen() {
+  const [currentPage, setCurrentPage] = useState(0);
+  const pagerRef = useRef<PagerView>(null);
   const router = useRouter();
-  const flatListRef = useRef<FlatList>(null);
 
-  const scrollX = useSharedValue(0);
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  const onScroll = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      scrollX.value = e.contentOffset.x;
-    },
-    onMomentumEnd: (e) => {
-      runOnJS(setCurrentIndex)(Math.round(e.contentOffset.x / width));
-    },
-  });
+  const handleFinish = async () => {
+    await storage.setOnboardingComplete(true);
+    router.replace("/(tabs)");
+  };
 
   const handleNext = () => {
-    if (currentIndex < DATA.length - 1) {
-      flatListRef.current?.scrollToIndex({
-        index: currentIndex + 1,
-      });
+    if (currentPage < 2) {
+      pagerRef.current?.setPage(currentPage + 1);
     } else {
-      router.replace("/home");
+      handleFinish();
     }
   };
 
-  const renderItem = ({ item }: any) => (
-    <View style={styles.slide}>
-      {/* VISUAL CARD */}
-      <View style={styles.card}>
-        <LinearGradient
-          colors={["#1E293B", "#2D458E"]}
-          style={styles.gradientCard}
-        >
-          {/* SLIDE 1 */}
-          {item.id === "1" && (
-            <>
-              <Feather name="camera" size={60} color="white" />
-              <View style={styles.scanLine} />
-              <Text style={styles.cardLabel}>AI SCANNING</Text>
-            </>
-          )}
-
-          {/* SLIDE 2 */}
-          {item.id === "2" && (
-            <>
-              <Feather name="shield" size={60} color="white" />
-              <Text style={styles.cardLabel}>Interaction Check</Text>
-              <Text style={styles.warning}>⚠ High Risk Detected</Text>
-            </>
-          )}
-
-          {/* SLIDE 3 */}
-          {item.id === "3" && (
-            <>
-              <Feather name="bell" size={60} color="white" />
-              <Text style={styles.cardLabel}>Daily Reminder</Text>
-              <Text style={styles.success}>✔ 100% Adherence</Text>
-            </>
-          )}
-        </LinearGradient>
-      </View>
-
-      {/* TEXT */}
-      <View style={styles.textBox}>
-        <Text style={styles.title}>
-          {item.title} {"\n"}
-          <Text style={styles.highlight}>{item.highlight}</Text>
-        </Text>
-
-        <Text style={styles.desc}>{item.description}</Text>
-      </View>
-    </View>
-  );
+  const handleSkip = () => {
+    handleFinish();
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* SKIP */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace("/home")}>
-          <Text style={styles.skip}>Skip ›</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+        <Text style={styles.skipText}>Skip</Text>
+      </TouchableOpacity>
 
-      {/* SLIDES */}
-      <Animated.FlatList
-        ref={flatListRef as any}
-        data={DATA}
-        renderItem={renderItem}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={onScroll}
-        keyExtractor={(item) => item.id}
-      />
+      <PagerView
+        style={styles.pagerView}
+        initialPage={0}
+        ref={pagerRef}
+        onPageSelected={(e) => setCurrentPage(e.nativeEvent.position)}
+      >
+        {ONBOARDING_DATA.map((item, index) => (
+          <View key={index} style={styles.page}>
+            <View style={styles.imageContainer}>
+              <Image
+                source={item.image}
+                style={styles.svgImage}
+                contentMode="contain"
+              />
+            </View>
+            
+            <View style={styles.content}>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.description}>{item.description}</Text>
+            </View>
+          </View>
+        ))}
+      </PagerView>
 
-      {/* FOOTER */}
-      <View style={styles.footer}>
+      <SafeAreaView edges={["bottom"]} style={styles.footer}>
         <View style={styles.pagination}>
-          {DATA.map((_, i) => (
-            <PaginationDot key={i} index={i} scrollX={scrollX} />
+          {[0, 1, 2].map((i) => (
+            <View
+              key={i}
+              style={[
+                styles.dot,
+                currentPage === i ? styles.activeDot : styles.inactiveDot,
+              ]}
+            />
           ))}
         </View>
 
-        <TouchableOpacity style={styles.btnWrap} onPress={handleNext}>
-          <LinearGradient colors={["#2D458E", "#1E293B"]} style={styles.btn}>
-            <Text style={styles.btnText}>{DATA[currentIndex].buttonText}</Text>
-
-            <View style={styles.arrow}>
-              <Feather name="arrow-right" size={18} color="#fff" />
-            </View>
+        <TouchableOpacity style={styles.button} onPress={handleNext}>
+          <LinearGradient
+            colors={[theme.colors.primary, theme.colors.primaryAccent]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.gradient}
+          >
+            <Text style={styles.buttonText}>
+              {currentPage === 2 ? "Get Started" : "Next"}
+            </Text>
+            <Feather name="arrow-right" size={20} color="white" />
           </LinearGradient>
         </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-// ─── STYLES ───
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
-
-  header: { alignItems: "flex-end", padding: 20 },
-  skip: { color: "#64748B", fontSize: 16 },
-
-  slide: {
-    width,
-    alignItems: "center",
-    paddingHorizontal: 25,
-  },
-
-  card: {
-    width: "100%",
-    height: height * 0.42,
-    borderRadius: 30,
-    overflow: "hidden",
-    marginTop: 10,
-    elevation: 6,
-  },
-
-  gradientCard: {
+  container: {
     flex: 1,
-    borderRadius: 30,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 15,
+    backgroundColor: "white",
   },
-
-  scanLine: {
-    width: "70%",
-    height: 2,
-    backgroundColor: "#3B82F6",
+  skipButton: {
+    position: "absolute",
+    top: 60,
+    right: 30,
+    zIndex: 10,
+    padding: 10,
   },
-
-  cardLabel: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  warning: {
-    color: "#FCA5A5",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  success: {
-    color: "#86EFAC",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  textBox: { marginTop: 35, alignItems: "center" },
-
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    textAlign: "center",
-    color: "#0F172A",
-  },
-
-  highlight: { color: "#2D458E" },
-
-  desc: {
-    textAlign: "center",
+  skipText: {
     color: "#64748B",
     fontSize: 16,
-    marginTop: 15,
+    fontWeight: "600",
+  },
+  pagerView: {
+    flex: 1,
+  },
+  page: {
+    flex: 1,
+    alignItems: "center",
+  },
+  imageContainer: {
+    width: "100%",
+    height: "60%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  svgImage: {
+    width: width * 0.8,
+    height: width * 0.8,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 40,
+    alignItems: "center",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#0F172A",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  description: {
+    fontSize: 16,
+    color: "#64748B",
+    textAlign: "center",
     lineHeight: 24,
   },
-
-  footer: { padding: 25 },
-
+  footer: {
+    paddingBottom: 40,
+  },
   pagination: {
     flexDirection: "row",
     justifyContent: "center",
-    marginBottom: 25,
-    gap: 6,
+    marginBottom: 30,
+    gap: 8,
   },
-
   dot: {
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#2D458E",
   },
-
-  btnWrap: { width: "100%" },
-
-  btn: {
-    height: 60,
-    borderRadius: 30,
-    justifyContent: "center",
+  activeDot: {
+    width: 32,
+    backgroundColor: theme.colors.primary,
+  },
+  inactiveDot: {
+    width: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  button: {
+    marginHorizontal: 40,
+    height: 56,
+    borderRadius: 28,
+    overflow: "hidden",
+    ...theme.shadows.md,
+  },
+  gradient: {
+    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
   },
-
-  btnText: {
-    color: "#fff",
+  buttonText: {
+    color: "white",
     fontSize: 18,
-    fontWeight: "700",
-  },
-
-  arrow: {
-    position: "absolute",
-    right: 15,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    width: 35,
-    height: 35,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
+    fontWeight: "bold",
   },
 });
+

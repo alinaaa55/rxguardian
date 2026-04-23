@@ -8,20 +8,70 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../constants/theme";
+import { MedStore } from "./(tabs)/meds";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useState, useEffect } from "react";
 
 export default function MedicineDetails() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const [isTaken, setIsTaken] = useState(false);
+  const [medData, setMedData] = useState<any>(null);
 
-  const name = (params.name as string) || "Metformin";
-  const dose = (params.dose as string) || "500mg";
-  const type = (params.type as string) || "Oral Tablet";
-  const dosage = (params.dosage as string) || "1 Tablet";
-  const frequency = (params.frequency as string) || "2x Daily";
-  const duration = (params.duration as string) || "90 Days Left";
+  const id = params.id as string;
+
+  const loadData = useCallback(async () => {
+    const meds = await MedStore.getAll();
+    const current = meds.find((m: any) => m.id === id);
+    if (current) {
+      setMedData(current);
+      setIsTaken(current.taken);
+    }
+  }, [id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  if (!medData) return null;
+
+  const { name, dose, type, dosage, frequency, duration } = medData;
+
+  const handleToggleTaken = async () => {
+    await MedStore.toggleTaken(id);
+    setIsTaken(!isTaken);
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      "Delete Medication",
+      `Are you sure you want to remove ${name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: async () => {
+            await MedStore.delete(id);
+            router.back();
+          }
+        },
+      ]
+    );
+  };
+
+  const handleEdit = () => {
+    router.push({
+      pathname: "/add-med",
+      params: { id },
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -41,9 +91,14 @@ export default function MedicineDetails() {
 
           <Text style={styles.headerTitle}>DETAILS</Text>
 
-          <TouchableOpacity style={styles.iconBtn}>
-            <Feather name="edit-2" size={18} color={theme.colors.primary} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity style={styles.iconBtn} onPress={handleEdit}>
+              <Feather name="edit-2" size={18} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.iconBtn, { backgroundColor: theme.colors.dangerLight }]} onPress={handleDelete}>
+              <Feather name="trash-2" size={18} color={theme.colors.danger} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* TITLE */}
@@ -125,9 +180,17 @@ export default function MedicineDetails() {
           <Text style={styles.refillText}>Refill</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.takenBtn}>
-          <Feather name="check" size={18} color="white" />
-          <Text style={styles.takenText}>Mark as Taken</Text>
+        <TouchableOpacity 
+          style={[
+            styles.takenBtn, 
+            isTaken && { backgroundColor: theme.colors.success }
+          ]} 
+          onPress={handleToggleTaken}
+        >
+          <Feather name={isTaken ? "check-circle" : "check"} size={18} color="white" />
+          <Text style={styles.takenText}>
+            {isTaken ? "Taken Today" : "Mark as Taken"}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

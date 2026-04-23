@@ -2,7 +2,7 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState, useEffect } from "react";
 import {
     Animated,
     FlatList,
@@ -15,100 +15,52 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    ActivityIndicator,
+    Linking,
+    Modal,
+    Pressable,
+    Dimensions,
+    ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../constants/theme";
+import { chatService, ChatMessage, PharmEasyResult } from "../services/chatService";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type MedicineSuggestion = {
-  name: string;
-  quantity: string;
-  price: string;
-};
-
-type Message = {
+type UIMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   imageUri?: string;
-  suggestion?: MedicineSuggestion;
+  suggestion?: PharmEasyResult[];
   timestamp: Date;
 };
 
-// ─── Mock AI Response Logic ───────────────────────────────────────────────────
-const generateAIResponse = async (
-  userMessage: string,
-  hasImage: boolean,
-): Promise<{ text: string; suggestion?: MedicineSuggestion }> => {
-  await new Promise((r) => setTimeout(r, 1200 + Math.random() * 800));
+// ─── Medicine Action Card ──────────────────────────────────────────────────
+const MedicineChip = ({ result, onPress }: { result: PharmEasyResult, onPress: () => void }) => {
+  const firstImage = result.results[0]?.image;
 
-  if (hasImage) {
-    return {
-      text: "I've analyzed your prescription image. 🔍\n\nThis is **Metformin 500mg**, commonly prescribed for Type 2 diabetes to help control high blood sugar. The dosage is one tablet, twice daily with meals.",
-      suggestion: {
-        name: "Metformin 500mg",
-        quantity: "30 Tablets · Generic",
-        price: "$12.50",
-      },
-    };
-  }
-
-  const lower = userMessage.toLowerCase();
-
-  if (lower.includes("interaction") || lower.includes("drug")) {
-    return {
-      text: "I can check drug interactions for you. Please share the names of the medications you're concerned about, or upload your prescription and I'll analyze them automatically.",
-    };
-  }
-  if (lower.includes("schedule") || lower.includes("reminder")) {
-    return {
-      text: "I can help you set up a personalized medication schedule! Tell me:\n\n• Which medications do you take?\n• What time do you usually wake up?\n• Do you take any medications with food?\n\nI'll create a smart reminder plan for you.",
-    };
-  }
-  if (lower.includes("side effect")) {
-    return {
-      text: "Side effects vary by medication. Could you tell me which medication you're asking about? I'll give you a clear summary of common and rare side effects, plus what to watch out for.",
-    };
-  }
-  if (
-    lower.includes("refill") ||
-    lower.includes("checkout") ||
-    lower.includes("buy")
-  ) {
-    return {
-      text: "I can help you refill your prescription. Based on your history, here's what may need a refill soon:",
-      suggestion: {
-        name: "Atorvastatin 10mg",
-        quantity: "30 Tablets · Generic",
-        price: "$8.99",
-      },
-    };
-  }
-
-  return {
-    text: "I'm RxGuardian AI, your smart medication assistant. I can help you:\n\n• Analyze prescriptions 📋\n• Check drug interactions ⚠️\n• Build medication schedules 🗓️\n• Track your adherence 📊\n• Refill prescriptions 💊\n\nWhat would you like help with today?",
-  };
+  return (
+    <TouchableOpacity style={styles.medicineActionCard} onPress={onPress}>
+      <View style={styles.cardImageContainer}>
+        {firstImage ? (
+          <Image source={{ uri: firstImage }} style={styles.cardImage} />
+        ) : (
+          <MaterialCommunityIcons name="pill" size={24} color={theme.colors.primaryAccent} />
+        )}
+      </View>
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle} numberOfLines={1}>{result.medicine}</Text>
+        <Text style={styles.cardSubtitle}>{result.results.length} options available</Text>
+      </View>
+      <View style={styles.cardAction}>
+        <Feather name="arrow-right" size={18} color={theme.colors.primaryAccent} />
+      </View>
+    </TouchableOpacity>
+  );
 };
-
-// ─── Medicine Suggestion Card ─────────────────────────────────────────────────
-const MedicineSuggestionCard = ({
-  suggestion,
-}: {
-  suggestion: MedicineSuggestion;
-}) => (
-  <View style={styles.suggestionCard}>
-    <View style={styles.suggestionIcon}>
-      <MaterialCommunityIcons name="pill" size={22} color={theme.colors.primaryAccent} />
-    </View>
-    <View style={styles.suggestionInfo}>
-      <Text style={styles.suggestionName}>{suggestion.name}</Text>
-      <Text style={styles.suggestionQty}>{suggestion.quantity}</Text>
-    </View>
-    <View style={styles.suggestionPrice}>
-      <Text style={styles.suggestionPriceText}>{suggestion.price}</Text>
-    </View>
-  </View>
-);
 
 // ─── Typing Indicator ─────────────────────────────────────────────────────────
 const TypingIndicator = () => {
@@ -118,7 +70,7 @@ const TypingIndicator = () => {
     useRef(new Animated.Value(0)).current,
   ];
 
-  React.useEffect(() => {
+  useEffect(() => {
     const animations = dots.map((dot, i) =>
       Animated.loop(
         Animated.sequence([
@@ -186,7 +138,7 @@ const TypingIndicator = () => {
 };
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
-const MessageBubble = ({ message }: { message: Message }) => {
+const MessageBubble = ({ message, onMedicinePress }: { message: UIMessage, onMedicinePress: (res: PharmEasyResult) => void }) => {
   const isUser = message.role === "user";
 
   const formatText = (text: string) =>
@@ -258,8 +210,16 @@ const MessageBubble = ({ message }: { message: Message }) => {
                 </View>
             ) : null}
 
-            {message.suggestion && (
-                <MedicineSuggestionCard suggestion={message.suggestion} />
+            {message.suggestion && message.suggestion.length > 0 && (
+              <View style={styles.chipsContainer}>
+                {message.suggestion.map((res, i) => (
+                  <MedicineChip 
+                    key={i} 
+                    result={res} 
+                    onPress={() => onMedicinePress(res)} 
+                  />
+                ))}
+              </View>
             )}
         </View>
 
@@ -288,27 +248,58 @@ export default function ChatScreen() {
   const router = useRouter();
   const flatRef = useRef<FlatList>(null);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "0",
-      role: "assistant",
-      text: "Hi! I'm RxGuardian AI. 👋\n\nI can analyze your prescriptions, check drug interactions, and help manage your medications. How can I help you today?",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  
+  // Bottom Sheet State
+  const [selectedMedicine, setSelectedMedicine] = useState<PharmEasyResult | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(false);
 
   const scrollToBottom = () => {
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const loadHistory = async () => {
+    try {
+      const history = await chatService.getHistory();
+      const uiHistory: UIMessage[] = history.map((msg) => ({
+        id: msg.id.toString(),
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        text: msg.message,
+        timestamp: new Date(msg.timestamp),
+      }));
+      
+      if (uiHistory.length === 0) {
+        setMessages([
+          {
+            id: "0",
+            role: "assistant",
+            text: "Hi! I'm RxGuardian AI. 👋\n\nI can analyze your prescriptions, check drug interactions, and help manage your medications. How can I help you today?",
+            timestamp: new Date(),
+          },
+        ]);
+      } else {
+        setMessages(uiHistory);
+      }
+    } catch (error) {
+      console.error("Failed to load history:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
   };
 
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed && !pendingImage) return;
 
-    const userMsg: Message = {
+    const userMsg: UIMessage = {
       id: Date.now().toString(),
       role: "user",
       text: trimmed,
@@ -317,28 +308,59 @@ export default function ChatScreen() {
     };
 
     setMessages((prev) => [...prev, userMsg]);
+    const currentInput = trimmed;
+    const currentImage = pendingImage;
+    
     setInput("");
     setPendingImage(null);
     setIsTyping(true);
     scrollToBottom();
 
-    const { text, suggestion } = await generateAIResponse(
-      trimmed,
-      !!pendingImage,
-    );
+    try {
+      let response;
+      if (currentImage) {
+        response = await chatService.sendImageMessage(currentInput || "Analyze this prescription", currentImage);
+      } else {
+        response = await chatService.sendMessage(currentInput);
+      }
 
-    const aiMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: "assistant",
-      text,
-      suggestion,
-      timestamp: new Date(),
-    };
+      const newMessages: UIMessage[] = [];
+      if (response.pre_tool_message) {
+        newMessages.push({
+          id: response.pre_tool_message.id.toString(),
+          role: 'assistant',
+          text: response.pre_tool_message.message,
+          timestamp: new Date(response.pre_tool_message.timestamp),
+        });
+      }
 
-    setIsTyping(false);
-    setMessages((prev) => [...prev, aiMsg]);
-    scrollToBottom();
+      newMessages.push({
+        id: response.bot_message.id.toString(),
+        role: 'assistant',
+        text: response.bot_message.message,
+        suggestion: response.pharmeasy_results,
+        timestamp: new Date(response.bot_message.timestamp),
+      });
+
+      setIsTyping(false);
+      setMessages((prev) => [...prev, ...newMessages]);
+      scrollToBottom();
+    } catch (error) {
+      console.error("Chat error:", error);
+      setIsTyping(false);
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString(),
+        role: 'assistant',
+        text: "Sorry, I encountered an error processing your request. Please try again.",
+        timestamp: new Date(),
+      }]);
+    }
   }, [input, pendingImage]);
+
+  const handleMedicinePress = (res: PharmEasyResult) => {
+    setSelectedMedicine(res);
+    setSheetVisible(true);
+  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -395,22 +417,34 @@ export default function ChatScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 20}
       >
-        <FlatList
-          ref={flatRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messageList}
-          showsVerticalScrollIndicator={false}
-          ListFooterComponent={isTyping ? <TypingIndicator /> : null}
-          renderItem={({ item }) => <MessageBubble message={item} />}
-          onContentSizeChange={scrollToBottom}
-        />
+        {loadingHistory ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Loading chat history...</Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.messageList}
+            showsVerticalScrollIndicator={false}
+            ListFooterComponent={isTyping ? <TypingIndicator /> : null}
+            renderItem={({ item }) => (
+              <MessageBubble 
+                message={item} 
+                onMedicinePress={handleMedicinePress} 
+              />
+            )}
+            onContentSizeChange={scrollToBottom}
+          />
+        )}
 
         {/* Pending image preview */}
         {pendingImage && (
           <View style={styles.pendingImageRow}>
             <Image source={{ uri: pendingImage }} style={styles.pendingThumb} />
-            <Text style={styles.pendingLabel}>Prescription image ready</Text>
+            <Text style={styles.pendingLabel}>Prescription ready to send</Text>
             <TouchableOpacity onPress={() => setPendingImage(null)}>
               <Ionicons
                 name="close-circle"
@@ -459,6 +493,50 @@ export default function ChatScreen() {
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
+
+      {/* ── Bottom Sheet (Modal) ── */}
+      <Modal
+        visible={sheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSheetVisible(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setSheetVisible(false)} 
+        />
+        <View style={styles.bottomSheet}>
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetTitleRow}>
+              <Text style={styles.sheetTitle}>PharmEasy Results</Text>
+              <TouchableOpacity onPress={() => setSheetVisible(false)}>
+                <Ionicons name="close-circle" size={24} color={theme.colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.sheetSubtitle}>Search results for: {selectedMedicine?.medicine}</Text>
+          </View>
+
+          <ScrollView 
+            contentContainerStyle={styles.sheetContent} 
+            showsVerticalScrollIndicator={false}
+          >
+            {selectedMedicine?.results.map((item, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={styles.resultItem}
+                onPress={() => Linking.openURL(item.url)}
+              >
+                <Image source={{ uri: item.image }} style={styles.resultImage} />
+                <View style={styles.resultInfo}>
+                  <Text style={styles.resultName} numberOfLines={2}>{item.title}</Text>
+                  <Text style={styles.buyText}>Buy Now on PharmEasy →</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -576,6 +654,142 @@ const styles = StyleSheet.create({
   },
   uploadedImage: { width: 180, height: 140, borderRadius: 12 },
 
+  // Chips Container
+  chipsContainer: {
+    flexDirection: 'column',
+    gap: 10,
+    marginTop: 8,
+    width: '100%',
+  },
+  medicineActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    padding: 12,
+    borderRadius: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadows.sm,
+  },
+  cardImageContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.text.primary,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: theme.colors.text.secondary,
+    marginTop: 2,
+  },
+  cardAction: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Bottom Sheet
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SCREEN_HEIGHT * 0.65,
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 12,
+    ...theme.shadows.lg,
+  },
+  sheetHeader: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  sheetSubtitle: {
+    fontSize: 14,
+    color: theme.colors.text.secondary,
+    marginTop: 4,
+  },
+  sheetContent: {
+    padding: 20,
+    gap: 16,
+  },
+  resultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 18,
+    padding: 12,
+    gap: 16,
+    ...theme.shadows.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  resultImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: theme.colors.background,
+  },
+  resultInfo: {
+    flex: 1,
+  },
+  resultName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text.primary,
+    lineHeight: 20,
+  },
+  buyText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.primaryAccent,
+    marginTop: 6,
+  },
+
   // Typing dots
   typingDot: {
     width: 7,
@@ -583,36 +797,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: theme.colors.primaryAccent,
   },
-
-  // Medicine suggestion card
-  suggestionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.colors.successLight,
-    borderWidth: 1,
-    borderColor: theme.colors.success,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-  },
-  suggestionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  suggestionInfo: { flex: 1 },
-  suggestionName: { fontSize: 14, fontWeight: "700", color: theme.colors.text.primary },
-  suggestionQty: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 2 },
-  suggestionPrice: {
-    backgroundColor: theme.colors.primaryAccent,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  suggestionPriceText: { color: "#FFF", fontWeight: "700", fontSize: 13 },
 
   // Pending image preview
   pendingImageRow: {
@@ -668,4 +852,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnDisabled: { backgroundColor: theme.colors.border },
+  
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    color: theme.colors.text.secondary,
+    fontSize: 14,
+  },
 });
+
+

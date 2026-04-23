@@ -1,8 +1,15 @@
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { useAuthCheck } from "../hooks/useAuthCheck";
+
+import LoadingScreen from "./loading";
 
 export default function RootLayout() {
+  const { isReady } = useAuthCheck();
+
+  if (!isReady) return <LoadingScreen />;
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
@@ -16,6 +23,7 @@ export default function RootLayout() {
         <Stack.Screen name="scan" />
         <Stack.Screen name="profile" />
         <Stack.Screen name="chat" />
+        <Stack.Screen name="profile-setup" />
       </Stack>
     </SafeAreaProvider>
   );

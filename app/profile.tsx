@@ -1,8 +1,9 @@
 // app/profile.tsx
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -13,28 +14,59 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../constants/theme";
-
-const INITIAL_PROFILE = {
-  name: "Ayaan Khan",
-  email: "ayaan.khan@email.com",
-  phone: "+91 98765 43210",
-  dob: "12 March 1990",
-  bloodGroup: "B+",
-  allergies: "Penicillin, Sulfa drugs",
-  doctor: "Dr. Priya Mehta",
-  hospital: "Apollo Hospitals, Mumbai",
-  memberSince: "January 2023",
-};
+import { storage } from "../services/storage";
+import { authService } from "../services/authService";
 
 export default function ProfileScreen() {
   const router = useRouter();
 
-  const [profile, setProfile] = useState(INITIAL_PROFILE);
+  const [profile, setProfile] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    setIsLoading(true);
+    try {
+      const userInfo = await storage.getUserInfo();
+      if (userInfo) {
+        setProfile(userInfo);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await storage.saveUserInfo(profile);
+      setIsEditing(false);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await authService.logout();
+    router.replace("/login");
+  };
 
   const handleChange = (key: string, value: string) => {
     setProfile({ ...profile, [key]: value });
   };
+
+  if (isLoading || !profile) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -50,7 +82,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.editBtn}
-          onPress={() => setIsEditing(!isEditing)}
+          onPress={isEditing ? handleSave : () => setIsEditing(true)}
         >
           <Feather
             name={isEditing ? "check" : "edit-2"}
@@ -67,7 +99,9 @@ export default function ProfileScreen() {
         {/* AVATAR */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitials}>AK</Text>
+            <Text style={styles.avatarInitials}>
+              {profile.name ? profile.name.split(' ').map((n: any) => n[0]).join('').toUpperCase() : 'U'}
+            </Text>
             <View style={styles.onlineDot} />
           </View>
 
@@ -82,7 +116,7 @@ export default function ProfileScreen() {
           )}
 
           <Text style={styles.profileSub}>
-            Member since {profile.memberSince}
+            Member since {profile.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}
           </Text>
         </View>
 
@@ -95,24 +129,24 @@ export default function ProfileScreen() {
               label="Email"
               value={profile.email}
               icon={<Feather name="mail" size={16} color={theme.colors.primaryAccent} />}
-              editable={isEditing}
-              onChange={(v) => handleChange("email", v)}
+              editable={false} // Email typically not editable
+              onChange={(v: string) => handleChange("email", v)}
             />
             <Divider />
             <InfoRow
               label="Phone"
-              value={profile.phone}
+              value={profile.phone || "Not set"}
               icon={<Feather name="phone" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
-              onChange={(v) => handleChange("phone", v)}
+              onChange={(v: string) => handleChange("phone", v)}
             />
             <Divider />
             <InfoRow
               label="Date of Birth"
-              value={profile.dob}
+              value={profile.dob || "Not set"}
               icon={<Feather name="calendar" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
-              onChange={(v) => handleChange("dob", v)}
+              onChange={(v: string) => handleChange("dob", v)}
             />
           </View>
         </View>
@@ -124,43 +158,43 @@ export default function ProfileScreen() {
           <View style={styles.card}>
             <InfoRow
               label="Blood Group"
-              value={profile.bloodGroup}
+              value={profile.bloodGroup || "Not set"}
               icon={
                 <MaterialIcons name="bloodtype" size={16} color={theme.colors.danger} />
               }
               highlight
               editable={isEditing}
-              onChange={(v) => handleChange("bloodGroup", v)}
+              onChange={(v: string) => handleChange("bloodGroup", v)}
             />
             <Divider />
             <InfoRow
               label="Allergies"
-              value={profile.allergies}
+              value={profile.allergies || "None"}
               icon={<MaterialIcons name="warning" size={16} color={theme.colors.secondary} />}
               editable={isEditing}
-              onChange={(v) => handleChange("allergies", v)}
+              onChange={(v: string) => handleChange("allergies", v)}
             />
             <Divider />
             <InfoRow
               label="Primary Doctor"
-              value={profile.doctor}
+              value={profile.doctor || "Not set"}
               icon={<Feather name="user" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
-              onChange={(v) => handleChange("doctor", v)}
+              onChange={(v: string) => handleChange("doctor", v)}
             />
             <Divider />
             <InfoRow
               label="Hospital"
-              value={profile.hospital}
+              value={profile.hospital || "Not set"}
               icon={<Feather name="map-pin" size={16} color={theme.colors.primaryAccent} />}
               editable={isEditing}
-              onChange={(v) => handleChange("hospital", v)}
+              onChange={(v: string) => handleChange("hospital", v)}
             />
           </View>
         </View>
 
         {/* SIGN OUT */}
-        <TouchableOpacity style={styles.signOutBtn}>
+        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
           <Feather name="log-out" size={16} color={theme.colors.danger} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>

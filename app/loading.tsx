@@ -1,68 +1,64 @@
-import { Feather } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import { View, StyleSheet, Text, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
-import {
-    Animated,
-    Easing,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    View,
-} from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { theme } from "../constants/theme";
 
-export default function LoadingScreen() {
-  const router = useRouter();
-  const progress = useRef(new Animated.Value(0)).current;
+export default function SplashScreen() {
+  const [progress] = useState(new Animated.Value(0));
 
   useEffect(() => {
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: 2200,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: false,
-    }).start(() => {
-      router.replace("/onboarding");
-    });
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(progress, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
   }, []);
 
-  const widthInterpolation = progress.interpolate({
+  const progressWidth = progress.interpolate({
     inputRange: [0, 1],
     outputRange: ["0%", "100%"],
   });
 
   return (
     <LinearGradient
-      colors={["#4338CA", "#6D28D9"]} // EXACT SAME AS LOGIN
-      style={{ flex: 1 }}
+      colors={["#1F3D89", "#5B21B6"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
     >
-      <SafeAreaView style={styles.container}>
-        {/* CENTER CONTENT */}
-        <View style={styles.centerSection}>
-          <View style={styles.logoCircle}>
-            <Feather name="shield" size={42} color="#6D28D9" />
+      {/* Decorative background elements from SVG */}
+      <View style={[styles.bgCircle, styles.circle1]} />
+      <View style={[styles.bgCircle, styles.circle2]} />
+      <View style={[styles.bgCircle, styles.circle3]} />
+
+      <View style={styles.content}>
+        <View style={styles.logoCircle}>
+          <Feather name="shield" size={64} color="#1F3D89" />
+          <View style={styles.innerLogoCircle}>
+             <Feather name="plus" size={24} color="white" />
           </View>
-
-          <Text style={styles.title}>RxGuardian</Text>
-
-          <Text style={styles.subtitle}>DECODE. PROTECT. ADHERE.</Text>
         </View>
+        <Text style={styles.title}>RxGuardian</Text>
+        <Text style={styles.subtitle}>Intelligent Medication Care</Text>
+      </View>
 
-        {/* BOTTOM SECTION */}
-        <View style={styles.bottomSection}>
-          <View style={styles.progressTrack}>
-            <Animated.View
-              style={[styles.progressFill, { width: widthInterpolation }]}
-            />
-          </View>
-
-          <Text style={styles.statusText}>
-            Establishing secure connection...
-          </Text>
-
-          <Text style={styles.version}>V2.0.4 • AI-POWERED</Text>
+      <View style={styles.loaderContainer}>
+        <View style={styles.progressBarBg}>
+          <Animated.View style={[styles.progressBarFill, { width: progressWidth }]} />
         </View>
-      </SafeAreaView>
+        <Text style={styles.loadingText}>Initializing system...</Text>
+      </View>
     </LinearGradient>
   );
 }
@@ -70,66 +66,105 @@ export default function LoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "space-between",
-    paddingVertical: 80,
-    paddingHorizontal: 24, // match login horizontal padding
-  },
-
-  centerSection: {
-    flex: 1,
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
   },
-
+  bgCircle: {
+    position: "absolute",
+    borderRadius: 1000,
+  },
+  circle1: {
+    width: 384,
+    height: 384,
+    backgroundColor: "white",
+    top: -128,
+    left: -128,
+    opacity: 0.05,
+  },
+  circle2: {
+    width: 320,
+    height: 320,
+    backgroundColor: "#C084FC",
+    bottom: 122,
+    right: -122,
+    opacity: 0.1,
+  },
+  circle3: {
+    width: 384,
+    height: 384,
+    backgroundColor: "#60A5FA",
+    bottom: -128,
+    left: 3,
+    opacity: 0.1,
+  },
+  content: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   logoCircle: {
-    width: 110, // MATCH LOGIN
-    height: 110,
-    borderRadius: 55,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
     backgroundColor: "white",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 20,
+    elevation: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
   },
-
+  innerLogoCircle: {
+    position: "absolute",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#5B21B6",
+    borderWidth: 2,
+    borderColor: "white",
+    alignItems: "center",
+    justifyContent: "center",
+    bottom: 10,
+    right: 10,
+  },
   title: {
-    fontSize: 32, // MATCH LOGIN
+    fontSize: 36,
     fontWeight: "700",
     color: "white",
+    marginTop: 24,
+    letterSpacing: 1.5,
   },
-
   subtitle: {
-    marginTop: 6,
     fontSize: 16,
-    color: "#E0E7FF",
+    color: "rgba(255, 255, 255, 0.7)",
+    marginTop: 8,
+    letterSpacing: 0.5,
   },
-
-  bottomSection: {
+  loaderContainer: {
+    position: "absolute",
+    bottom: 80,
+    width: "100%",
     alignItems: "center",
-    marginBottom: 40,
+    paddingHorizontal: 60,
   },
-
-  progressTrack: {
-    width: "80%",
+  progressBarBg: {
+    width: "100%",
     height: 6,
-    backgroundColor: "rgba(255,255,255,0.3)",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 3,
     overflow: "hidden",
-    marginBottom: 15,
   },
-
-  progressFill: {
+  progressBarFill: {
     height: "100%",
     backgroundColor: "white",
     borderRadius: 3,
   },
-
-  statusText: {
-    color: "#E0E7FF",
-    marginBottom: 20,
-  },
-
-  version: {
+  loadingText: {
+    color: "rgba(255, 255, 255, 0.6)",
     fontSize: 12,
-    color: "rgba(255,255,255,0.6)",
+    marginTop: 12,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 });
+

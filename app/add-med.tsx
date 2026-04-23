@@ -1,7 +1,7 @@
 // app/add-med.tsx
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useState, useEffect } from "react";
 import {
     Modal,
     ScrollView,
@@ -41,6 +41,8 @@ const COLOR_OPTIONS = [
 
 export default function AddMedScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const editId = params.id as string;
 
   const [name, setName] = useState("");
   const [dose, setDose] = useState("");
@@ -55,15 +57,36 @@ export default function AddMedScreen() {
   const [showError, setShowError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  function handleSave() {
+  useEffect(() => {
+    if (editId) {
+      const loadMed = async () => {
+        const meds = await MedStore.getAll();
+        const med = meds.find((m: any) => m.id === editId);
+        if (med) {
+          setName(med.name);
+          setDose(med.dose);
+          setType(med.type);
+          setDosage(med.dosage);
+          setFrequency(med.frequency);
+          setDuration(med.duration);
+          setTime(med.time);
+          setSelectedIcon(med.icon);
+          const colorOpt = COLOR_OPTIONS.find(c => c.color === med.color) || COLOR_OPTIONS[0];
+          setSelectedColor(colorOpt);
+        }
+      };
+      loadMed();
+    }
+  }, [editId]);
+
+  async function handleSave() {
     if (!name.trim() || !dose.trim() || !frequency.trim()) {
       setErrorMsg("Please fill in the required fields:\nMedicine Name, Dose and Frequency.");
       setShowError(true);
       return;
     }
 
-    const newMed = {
-      id: Date.now().toString(),
+    const medData = {
       name: name.trim(),
       dose: dose.trim(),
       type: type.trim() || "Tablet",
@@ -74,13 +97,24 @@ export default function AddMedScreen() {
       icon: selectedIcon,
       color: selectedColor.color,
       bgColor: selectedColor.bg,
-      status: "active",
-      taken: false,
-      refillDue: false,
     };
 
-    MedStore.add(newMed);
-    router.back();
+    if (editId) {
+      await MedStore.update(editId, medData);
+      // We need to go back twice or replace the route to refresh details
+      // But actually, just going back is enough if details page refreshes on focus
+      router.back();
+    } else {
+      const newMed = {
+        ...medData,
+        id: Date.now().toString(),
+        status: "active",
+        taken: false,
+        refillDue: false,
+      };
+      await MedStore.add(newMed);
+      router.back();
+    }
   }
 
   return (
@@ -96,9 +130,9 @@ export default function AddMedScreen() {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Feather name="x" size={20} color={theme.colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Medication</Text>
+          <Text style={styles.headerTitle}>{editId ? "Edit Medication" : "Add Medication"}</Text>
           <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>Save</Text>
+            <Text style={styles.saveBtnText}>{editId ? "Update" : "Save"}</Text>
           </TouchableOpacity>
         </View>
 

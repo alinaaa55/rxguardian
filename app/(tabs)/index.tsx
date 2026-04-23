@@ -1,6 +1,7 @@
 // app/(tabs)/index.tsx
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ScrollView,
   StatusBar,
@@ -11,6 +12,11 @@ import {
 } from "react-native";
 import { theme } from "../../constants/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { storage } from "../../services/storage";
+
+import { MedStore } from "./meds";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
 
 // ─── Dynamic greeting helpers ─────────────────────────────────────────────────
 function getGreeting(): string {
@@ -32,6 +38,39 @@ function getDynamicDate(): string {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [userName, setUserName] = useState("User");
+  const [todayMeds, setTodayMeds] = useState<any[]>([]);
+  const [adherence, setAdherence] = useState(0);
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  const loadUser = async () => {
+    const userInfo = await storage.getUserInfo();
+    if (userInfo && userInfo.name) {
+      setUserName(userInfo.name.split(' ')[0]);
+    }
+  };
+
+  const loadMeds = useCallback(async () => {
+    const allMeds = await MedStore.getAll();
+    const active = allMeds.filter((m: any) => m.status === "active");
+    setTodayMeds(active.slice(0, 3)); // Show top 3 active meds
+
+    if (active.length > 0) {
+      const taken = active.filter((m: any) => m.taken).length;
+      setAdherence(Math.round((taken / active.length) * 100));
+    } else {
+      setAdherence(100);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMeds();
+    }, [loadMeds])
+  );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: theme.colors.background }]}>
@@ -47,7 +86,7 @@ export default function HomeScreen() {
             <Text style={styles.date}>{getDynamicDate()}</Text>
 
             <View style={styles.headerRow}>
-              <Text style={styles.greeting}>{getGreeting()}, Ayaan</Text>
+              <Text style={styles.greeting}>{getGreeting()}, {userName}</Text>
 
               <TouchableOpacity
                 style={styles.avatar}
@@ -62,13 +101,15 @@ export default function HomeScreen() {
           {/* ADHERENCE CARD */}
           <View style={styles.adherenceCard}>
             <View style={styles.circleOuter}>
-              <Text style={styles.percent}>84%</Text>
+              <Text style={styles.percent}>{adherence}%</Text>
               <Text style={styles.adherenceText}>ADHERENCE</Text>
             </View>
 
-            <Text style={styles.greatJob}>Great job keeping up!</Text>
+            <Text style={styles.greatJob}>
+              {adherence === 100 ? "Perfect adherence!" : adherence > 70 ? "Great job keeping up!" : "Keep it up!"}
+            </Text>
             <Text style={styles.subText}>
-              You're on track with your weekly goals.
+              {adherence === 100 ? "You've taken all your meds today." : "You're on track with your weekly goals."}
             </Text>
           </View>
 
@@ -76,78 +117,54 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Today's Medicines</Text>
 
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/meds")}>
               <Text style={styles.seeAll}>See All</Text>
             </TouchableOpacity>
           </View>
 
-          {/* MEDICINE 1 — METFORMIN */}
-          <TouchableOpacity
-            style={styles.medicineCard}
-            onPress={() =>
-              router.push({
-                pathname: "/medicine-details",
-                params: {
-                  name: "Metformin",
-                  dose: "500mg",
-                  type: "Oral Tablet",
-                  dosage: "1 Tablet",
-                  frequency: "2x Daily",
-                  duration: "90 Days Left",
-                },
-              })
-            }
-          >
-            <View style={styles.iconCircleBlue}>
-              <Feather name="activity" size={20} color={theme.colors.primaryAccent} />
-            </View>
+          {todayMeds.length === 0 ? (
+             <View style={styles.medicineCard}>
+                <Text style={styles.subText}>No medications scheduled for today.</Text>
+             </View>
+          ) : (
+            todayMeds.map((med) => (
+              <TouchableOpacity
+                key={med.id}
+                style={styles.medicineCard}
+                onPress={() =>
+                  router.push({
+                    pathname: "/medicine-details",
+                    params: { id: med.id },
+                  })
+                }
+              >
+                <View style={[styles.iconCircle, { backgroundColor: med.bgColor }]}>
+                  <MaterialIcons name={med.icon === "pill" ? "medication" : "health-and-safety"} size={22} color={med.color} />
+                </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={styles.medName}>Metformin</Text>
-              <Text style={styles.medDetails}>
-                500mg • 8:00 AM • After meal
-              </Text>
-            </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.medName}>{med.name}</Text>
+                  <Text style={styles.medDetails}>
+                    {med.dose} • {med.time}
+                  </Text>
+                </View>
 
-            <View style={styles.takenBadge}>
-              <Feather name="check-circle" size={14} color={theme.colors.success} />
-              <Text style={styles.takenText}>Taken</Text>
-            </View>
-          </TouchableOpacity>
+                {med.taken ? (
+                  <View style={styles.takenBadge}>
+                    <Feather name="check-circle" size={14} color={theme.colors.success} />
+                    <Text style={styles.takenText}>Taken</Text>
+                  </View>
+                ) : (
+                  <View style={styles.pendingBadge}>
+                    <Ionicons name="time-outline" size={14} color={theme.colors.text.secondary} />
+                    <Text style={styles.pendingText}>Pending</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
+          )}
 
-          {/* MEDICINE 2 — LISINOPRIL */}
-          <TouchableOpacity
-            style={styles.medicineCard}
-            onPress={() =>
-              router.push({
-                pathname: "/medicine-details",
-                params: {
-                  name: "Lisinopril",
-                  dose: "10mg",
-                  type: "Tablet",
-                  dosage: "1 Tablet",
-                  frequency: "1x Daily",
-                  duration: "60 Days Left",
-                },
-              })
-            }
-          >
-            <View style={styles.iconCircleOrange}>
-              <Feather name="plus-square" size={20} color={theme.colors.secondary} />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text style={styles.medName}>Lisinopril</Text>
-              <Text style={styles.medDetails}>10mg • 8:00 PM • Before bed</Text>
-            </View>
-
-            <View style={styles.pendingBadge}>
-              <Ionicons name="time-outline" size={14} color={theme.colors.text.secondary} />
-              <Text style={styles.pendingText}>Pending</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* ALERT */}
+          {/* ALERT (Static for now, but could be dynamic) */}
           <View style={styles.alertCard}>
             <MaterialIcons name="warning" size={22} color={theme.colors.danger} />
 
@@ -287,21 +304,10 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
 
-  iconCircleBlue: {
+  iconCircle: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-
-  iconCircleOrange: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: theme.colors.secondaryLight,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 14,

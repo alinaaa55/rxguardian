@@ -12,111 +12,208 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    ScrollView,
+    Alert,
+    ActivityIndicator,
 } from "react-native";
+import { theme } from "../constants/theme";
+import { authService } from "../services/authService";
+import { storage } from "../services/storage";
 
 export default function LoginScreen() {
   const router = useRouter();
-
+  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleAuth = async () => {
+    if (!email || !password || (!isLogin && !name)) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (isLogin) {
+        await authService.login(email, password);
+      } else {
+        await authService.register(name, email, password);
+      }
+
+      // Check if profile is complete
+      const isProfileComplete = await storage.isProfileComplete();
+      if (!isProfileComplete) {
+        router.replace("/profile-setup");
+      } else {
+        const isOnboardingComplete = await storage.isOnboardingComplete();
+        if (!isOnboardingComplete) {
+          router.replace("/onboarding");
+        } else {
+          router.replace("/(tabs)");
+        }
+      }
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert("Authentication Failed", error.response?.data?.detail || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <LinearGradient colors={["#4338CA", "#6D28D9"]} style={{ flex: 1 }}>
+    <LinearGradient colors={[theme.colors.primary, "#4338CA"]} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.container}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
         >
-          {/* Logo Section */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoCircle}>
-              <Feather name="shield" size={42} color="#6D28D9" />
+          <ScrollView 
+            contentContainerStyle={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Logo Section */}
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle}>
+                <Feather name="shield" size={42} color={theme.colors.primary} />
+              </View>
+
+              <Text style={styles.title}>RxGuardian</Text>
+              <Text style={styles.subtitle}>Intelligent Medication Care</Text>
             </View>
 
-            <Text style={styles.title}>RxGuardian</Text>
-            <Text style={styles.subtitle}>Intelligent Medication Care</Text>
-          </View>
+            {/* Form Card */}
+            <View style={styles.card}>
+              <Text style={styles.welcomeText}>
+                {isLogin ? "Welcome Back" : "Create Account"}
+              </Text>
 
-          {/* Form Card */}
-          <View style={styles.card}>
-            {/* EMAIL */}
-            <Text style={styles.label}>EMAIL</Text>
-            <View style={styles.inputWrapper}>
-              <Feather name="mail" size={18} color="#A5B4FC" />
-              <TextInput
-                placeholder="Enter your email"
-                placeholderTextColor="#A5B4FC"
-                value={email}
-                onChangeText={setEmail}
-                style={styles.input}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
+              {!isLogin && (
+                <>
+                  <Text style={styles.label}>FULL NAME</Text>
+                  <View style={styles.inputWrapper}>
+                    <Feather name="user" size={18} color="#A5B4FC" />
+                    <TextInput
+                      placeholder="Enter your name"
+                      placeholderTextColor="#A5B4FC"
+                      value={name}
+                      onChangeText={setName}
+                      style={styles.input}
+                    />
+                  </View>
+                </>
+              )}
 
-            {/* PASSWORD */}
-            <View style={styles.passwordRow}>
-              <Text style={styles.label}>PASSWORD</Text>
-              <TouchableOpacity>
-                <Text style={styles.forgot}>Forgot?</Text>
-              </TouchableOpacity>
-            </View>
+              {/* EMAIL */}
+              <Text style={styles.label}>EMAIL</Text>
+              <View style={styles.inputWrapper}>
+                <Feather name="mail" size={18} color="#A5B4FC" />
+                <TextInput
+                  placeholder="Enter your email"
+                  placeholderTextColor="#A5B4FC"
+                  value={email}
+                  onChangeText={setEmail}
+                  style={styles.input}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
 
-            <View style={styles.inputWrapper}>
-              <Feather name="lock" size={18} color="#A5B4FC" />
-              <TextInput
-                placeholder="••••••••"
-                placeholderTextColor="#A5B4FC"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                style={styles.input}
-              />
-            </View>
+              {/* PASSWORD */}
+              <View style={styles.passwordRow}>
+                <Text style={styles.label}>PASSWORD</Text>
+                {isLogin && (
+                  <TouchableOpacity>
+                    <Text style={styles.forgot}>Forgot?</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
-            {/* LOGIN BUTTON */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => router.push("/loading")}
-            >
-              <LinearGradient
-                colors={["#60A5FA", "#6366F1"]}
-                style={styles.loginButton}
+              <View style={styles.inputWrapper}>
+                <Feather name="lock" size={18} color="#A5B4FC" />
+                <TextInput
+                  placeholder="••••••••"
+                  placeholderTextColor="#A5B4FC"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  style={styles.input}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <Feather 
+                    name={showPassword ? "eye" : "eye-off"} 
+                    size={18} 
+                    color="#A5B4FC" 
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* LOGIN/REGISTER BUTTON */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleAuth}
+                disabled={loading}
               >
-                <Feather
-                  name="log-in"
-                  size={18}
-                  color="white"
-                  style={{ marginRight: 8 }}
-                />
-                <Text style={styles.loginText}>Secure Login</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
-              <View style={styles.divider} />
-            </View>
-
-            {/* Social Buttons */}
-            <View style={styles.socialRow}>
-              {/* Google */}
-              <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-                <Image
-                  source={require("../assets/images/google.png")}
-                  style={styles.googleIcon}
-                  resizeMode="contain"
-                />
+                <LinearGradient
+                  colors={[theme.colors.primaryAccent, "#6366F1"]}
+                  style={styles.loginButton}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <>
+                      <Feather
+                        name={isLogin ? "log-in" : "user-plus"}
+                        size={18}
+                        color="white"
+                        style={{ marginRight: 8 }}
+                      />
+                      <Text style={styles.loginText}>
+                        {isLogin ? "Secure Login" : "Create Account"}
+                      </Text>
+                    </>
+                  )}
+                </LinearGradient>
               </TouchableOpacity>
 
-              {/* Apple */}
-              <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-                <FontAwesome name="apple" size={28} color="white" />
-              </TouchableOpacity>
+              {/* Toggle Section moved inside card, below login button */}
+              <View style={styles.toggleContainer}>
+                <Text style={styles.toggleLabel}>
+                  {isLogin ? "Don't have an account? " : "Already have an account? "}
+                </Text>
+                <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+                  <Text style={styles.toggleBtnText}>
+                    {isLogin ? "Register" : "Login"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.dividerRow}>
+                <View style={styles.divider} />
+                <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+                <View style={styles.divider} />
+              </View>
+
+              {/* Social Buttons */}
+              <View style={styles.socialRow}>
+                <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
+                  <Image
+                    source={require("../assets/images/google.png")}
+                    style={styles.googleIcon}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
+                  <FontAwesome name="apple" size={28} color="white" />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
@@ -124,10 +221,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  scrollContainer: {
     paddingHorizontal: 24,
+    paddingVertical: 40,
     justifyContent: "center",
+    flexGrow: 1,
   },
 
   logoContainer: {
@@ -143,6 +241,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,
+    ...theme.shadows.lg,
   },
 
   title: {
@@ -157,10 +256,20 @@ const styles = StyleSheet.create({
     color: "#E0E7FF",
   },
 
+  welcomeText: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "white",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+
   card: {
-    backgroundColor: "#3B2F8F",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
     padding: 24,
     borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
 
   label: {
@@ -173,10 +282,12 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2E2372",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     paddingHorizontal: 16,
     borderRadius: 18,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
 
   input: {
@@ -194,7 +305,7 @@ const styles = StyleSheet.create({
   },
 
   forgot: {
-    color: "#60A5FA",
+    color: theme.colors.secondary,
     fontSize: 13,
   },
 
@@ -205,6 +316,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 20,
     marginTop: 10,
+    ...theme.shadows.md,
   },
 
   loginText: {
@@ -222,7 +334,7 @@ const styles = StyleSheet.create({
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: "#5B4BC4",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
 
   dividerText: {
@@ -241,13 +353,33 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: "#2E2372",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
 
   googleIcon: {
     width: 30,
     height: 30,
   },
+
+  toggleContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 30,
+  },
+
+  toggleLabel: {
+    color: "#C7D2FE",
+    fontSize: 15,
+  },
+
+  toggleBtnText: {
+    color: theme.colors.secondary,
+    fontSize: 15,
+    fontWeight: "bold",
+  },
 });
+
