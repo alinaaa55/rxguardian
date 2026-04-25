@@ -16,16 +16,20 @@ function NotificationHandler() {
   const responseListener = useRef<any>();
 
   useEffect(() => {
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      if (voiceReminders) {
-        const { title, body } = notification.request.content;
-        Speech.speak(`${title}. ${body}`, { rate: 0.9 });
-      }
-    });
+    try {
+      notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+        if (voiceReminders) {
+          const { title, body } = notification.request.content;
+          Speech.speak(`${title}. ${body}`, { rate: 0.9 });
+        }
+      });
 
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      // Handle user tapping on notification if needed
-    });
+      responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+        // Handle user tapping on notification if needed
+      });
+    } catch (error) {
+      console.warn('Could not register notification listeners in current environment.');
+    }
 
     return () => {
       notificationListener.current?.remove();

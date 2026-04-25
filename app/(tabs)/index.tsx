@@ -16,6 +16,7 @@ import { storage } from "../../services/storage";
 import { useFocusEffect } from "@react-navigation/native";
 import api from "../../services/api";
 import { useSettings } from "../../context/SettingsContext";
+import { aiService } from "../../services/aiService";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -41,20 +42,40 @@ export default function HomeScreen() {
   const [userName, setUserName] = useState("User");
   const [todayData, setTodayData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [interactionResult, setInteractionResult] = useState<string | null>(null);
+  const [loadingAI, setLoadingAI] = useState(false);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [user, tracking] = await Promise.all([
+      const [user, tracking, meds] = await Promise.all([
         storage.getUserInfo(),
-        api.get("/api/v1/track/today")
+        api.get("/api/v1/track/today"),
+        storage.getMeds()
       ]);
       if (user?.name) setUserName(user.name.split(' ')[0]);
       setTodayData(tracking.data);
+
+      // Trigger AI Interaction check for current regimen
+      if (meds.length > 0) {
+        fetchInteractionCheck(meds[0].name);
+      }
     } catch (error) {
       console.error("Home load error:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchInteractionCheck = async (medName: string) => {
+    try {
+      setLoadingAI(true);
+      const res = await aiService.getInteractionAlert(medName);
+      setInteractionResult(res.bot_message.message);
+    } catch (err) {
+      console.error("AI Interaction check error:", err);
+    } finally {
+      setLoadingAI(false);
     }
   };
 
@@ -162,14 +183,24 @@ export default function HomeScreen() {
           )}
 
           {/* ALERT */}
-          <View style={styles.alertCard}>
-            <MaterialIcons name="warning" size={22 * fontSizeMultiplier} color={theme.colors.danger} />
+          <View style={[styles.alertCard, interactionResult?.includes('⚠️') && { backgroundColor: '#FEE2E2' }]}>
+            {loadingAI ? (
+              <ActivityIndicator size="small" color={theme.colors.danger} />
+            ) : (
+              <MaterialIcons name={interactionResult?.includes('⚠️') ? "report-problem" : "security"} size={22 * fontSizeMultiplier} color={interactionResult?.includes('⚠️') ? theme.colors.danger : theme.colors.success} />
+            )}
 
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.alertTitle, { fontSize: 14 * fontSizeMultiplier }]}>Interaction Alert</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.alertTitle, { fontSize: 14 * fontSizeMultiplier }, interactionResult && !interactionResult.includes('⚠️') && { color: theme.colors.success }]}>
+                  {interactionResult?.includes('⚠️') ? "Safety Warning" : "Interaction Check"}
+                </Text>
+              </View>
 
-              <Text style={[styles.alertText, { fontSize: 12 * fontSizeMultiplier }]}>
-                Remember to check for interactions if you start any new supplements or over-the-counter drugs.
+              <Text style={[styles.alertText, { fontSize: 12 * fontSizeMultiplier }, interactionResult && !interactionResult.includes('⚠️') && { color: theme.colors.text.primary }]}>
+                {loadingAI 
+                  ? "Analyzing your medications for safety..." 
+                  : interactionResult || "No interactions detected in your current regimen. Stay safe!"}
               </Text>
             </View>
           </View>

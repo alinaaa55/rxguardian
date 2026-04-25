@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme, palette } from "../constants/theme";
 import api from "../services/api";
+import { aiService } from "../services/aiService";
 import { notificationService } from "../services/notificationService";
 
 const ICON_OPTIONS = [
@@ -62,6 +63,26 @@ export default function AddMedScreen() {
   });
   const [selectedIcon, setSelectedIcon] = useState("pill");
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
+
+  const [loadingAI, setLoadingAI] = useState(false);
+
+  const handleCheckInteractions = async () => {
+    if (!medicineName.trim()) {
+      Alert.alert("Input Required", "Please enter a medicine name first.");
+      return;
+    }
+
+    try {
+      setLoadingAI(true);
+      const res = await aiService.getInteractionAlert(medicineName);
+      Alert.alert("AI Safety Check", res.bot_message.message);
+    } catch (error) {
+      console.error("AI check error:", error);
+      Alert.alert("Error", "Could not complete safety check. Please try again.");
+    } finally {
+      setLoadingAI(false);
+    }
+  };
 
   const [showTimePicker, setShowTimePicker] = useState<{
     slot: "morning" | "afternoon" | "evening";
@@ -263,7 +284,23 @@ export default function AddMedScreen() {
 
           <Text style={styles.sectionLabel}>DETAILS</Text>
           <View style={styles.fieldGroup}>
-            <Text style={styles.fieldSub}>Medicine Name</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={styles.fieldSub}>Medicine Name</Text>
+              <TouchableOpacity 
+                style={[styles.aiCheckBtn, !medicineName.trim() && { opacity: 0.5 }]} 
+                onPress={handleCheckInteractions}
+                disabled={loadingAI || !medicineName.trim()}
+              >
+                {loadingAI ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="robot-happy-outline" size={14} color={theme.colors.primary} />
+                    <Text style={styles.aiCheckText}>AI Check</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={styles.input}
               value={medicineName}
@@ -468,4 +505,20 @@ const styles = StyleSheet.create({
   timeOption: { paddingVertical: 14, width: "100%", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
   timeOptionText: { fontSize: 16, color: theme.colors.text.primary, fontWeight: "500" },
   timePickerClose: { marginTop: 20, padding: 10 },
+  aiCheckBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.primaryAccent + '30',
+  },
+  aiCheckText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
 });

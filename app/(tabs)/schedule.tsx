@@ -1,26 +1,27 @@
 // app/(tabs)/schedule.tsx
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useState, useCallback, useEffect } from "react";
+import * as Speech from "expo-speech";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Dimensions,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
-  Alert,
-  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../../constants/theme";
-import api from "../../services/api";
-import { useFocusEffect } from "@react-navigation/native";
-import * as Speech from "expo-speech";
-import * as Notifications from "expo-notifications";
 import { useSettings } from "../../context/SettingsContext";
+import api from "../../services/api";
+import { aiService } from "../../services/aiService";
 
 const { width } = Dimensions.get("window");
 
@@ -28,6 +29,12 @@ const { width } = Dimensions.get("window");
 const BAR_MAX = 100;
 const BAR_HEIGHT = 70;
 const DAYS_LABEL = ["M", "T", "W", "T", "F", "S", "S"];
+
+// Helper to map UI index (0=Mon...6=Sun) to Backend Index (0=Sun...6=Sat)
+// Backend start_date is Sunday (index 0)
+const mapUiToBackendIdx = (uiIdx: number) => {
+  return uiIdx === 6 ? 0 : uiIdx + 1;
+};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 type MedRowProps = {
@@ -82,12 +89,20 @@ const SectionLabel = ({ time, count }: { time: string; count: string }) => {
 };
 
 const BarChart = ({ data }: { data: any[] }) => {
-  const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  const getTodayIdx = () => {
+    const day = new Date().getDay();
+    return day === 0 ? 6 : day - 1; // Mon=0, Sun=6
+  };
+  const todayIdx = getTodayIdx();
+
   return (
     <View style={styles.barChartRow}>
-      {data.map((item, i) => {
-        const barH = (item.adherence_pct / BAR_MAX) * BAR_HEIGHT;
+      {DAYS_LABEL.map((label, i) => {
+        const backendIdx = mapUiToBackendIdx(i);
+        const item = data?.[backendIdx];
+        const barH = item ? (item.adherence_pct / BAR_MAX) * BAR_HEIGHT : 0;
         const isSelected = i === todayIdx;
+
         return (
           <View key={i} style={styles.barCol}>
             <View style={styles.barBg}>
@@ -107,7 +122,7 @@ const BarChart = ({ data }: { data: any[] }) => {
                 isSelected && { color: theme.colors.primary, fontWeight: "700" },
               ]}
             >
-              {DAYS_LABEL[i]}
+              {label}
             </Text>
           </View>
         );
@@ -116,23 +131,104 @@ const BarChart = ({ data }: { data: any[] }) => {
   );
 };
 
+const DosePattern = ({ data }: { data: any }) => {
+  const { fontSizeMultiplier, elderlyMode } = useSettings();
+  const times = ["Morning", "Afternoon", "Evening"];
+  const days = ["M", "T", "W", "T", "F", "S", "S"];
+
+  const getDotColor = (uiDayIdx: number, time: string) => {
+    const backendIdx = mapUiToBackendIdx(uiDayIdx);
+    const slotStatus = data?.grid?.[backendIdx]?.[time.toLowerCase()];
+
+    // 1. Precise Grid Logic (Preferred)
+    if (slotStatus) {
+      if (slotStatus === "taken") return theme.colors.success; // Green for taken
+      if (slotStatus === "missed") return theme.colors.danger;  // Red for missed
+      if (slotStatus === "pending") return "#F59E0B";           // Amber for pending
+      if (slotStatus === "none") return theme.colors.primary;   // Blue for none
+    }
+
+    // 2. Fallback Alignment
+    const daySummary = data?.daily_summaries?.[backendIdx];
+    if (!daySummary || daySummary.total_slots === 0) return theme.colors.primary; // Blue for none
+
+    if (daySummary.taken_count === daySummary.total_slots) return theme.colors.success; // Green for taken
+    if (daySummary.taken_count > 0) return "#F59E0B"; // Amber for pending
+
+    const todayUiIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+    if (uiDayIdx < todayUiIdx && daySummary.taken_count === 0) return theme.colors.danger;
+
+    return theme.colors.primary; // Default to blue for none
+  };
+
+  return (
+    <View style={[styles.patternCard, elderlyMode && styles.patternCardElderly]}>
+      <Text style={[styles.patternTitle, { fontSize: 14 * fontSizeMultiplier }]}>Dose History</Text>
+      <View style={{ marginTop: 16 }}>
+        {times.map((time) => (
+          <View key={time} style={styles.patternRow}>
+            <Text style={[styles.patternSlot, { fontSize: 12 * fontSizeMultiplier }]}>{time}</Text>
+            <View style={styles.dotRow}>
+              {days.map((_, dIdx) => (
+                <View
+                  key={dIdx}
+                  style={[styles.dot, { backgroundColor: getDotColor(dIdx, time) }]}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+        <View style={styles.legendRow}>
+          {days.map((day, i) => (
+            <Text key={i} style={styles.legendDay}>{day}</Text>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.legendLabels}>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.colors.success }]} />
+          <Text style={[styles.legendText, { fontSize: 11 * fontSizeMultiplier }]}>Taken</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.colors.danger }]} />
+          <Text style={[styles.legendText, { fontSize: 11 * fontSizeMultiplier }]}>Missed</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: "#F59E0B" }]} />
+          <Text style={[styles.legendText, { fontSize: 11 * fontSizeMultiplier }]}>Pending</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: theme.colors.primary }]} />
+          <Text style={[styles.legendText, { fontSize: 11 * fontSizeMultiplier }]}>No Meds</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
 export default function ScheduleScreen() {
   const router = useRouter();
-  const { 
-    elderlyMode, 
-    voiceReminders, 
+  const {
+    elderlyMode,
+    voiceReminders,
     notificationsEnabled,
-    toggleElderlyMode, 
-    toggleVoiceReminders, 
+    toggleElderlyMode,
+    toggleVoiceReminders,
     toggleNotifications,
-    fontSizeMultiplier 
+    fontSizeMultiplier
   } = useSettings();
-  
+
   const [activeTab, setActiveTab] = useState<"schedule" | "analytics">("schedule");
   const [loading, setLoading] = useState(true);
   const [todayData, setTodayData] = useState<any>(null);
   const [weeklyData, setWeeklyData] = useState<any>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+
+  // AI Data State
+  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [loadingAI, setLoadingAI] = useState(false);
 
   const fetchTracking = async () => {
     try {
@@ -143,10 +239,29 @@ export default function ScheduleScreen() {
       ]);
       setTodayData(todayRes.data);
       setWeeklyData(weeklyRes.data);
+      
+      // Trigger AI data fetch in background
+      fetchAIData();
     } catch (error) {
       console.error("Tracking fetch error:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAIData = async () => {
+    try {
+      setLoadingAI(true);
+      const [suggestionRes, insightRes] = await Promise.all([
+        aiService.getSuggestions(),
+        aiService.getInsights()
+      ]);
+      setAiSuggestion(suggestionRes.bot_message.message);
+      setAiInsight(insightRes.bot_message.message);
+    } catch (error) {
+      console.error("AI fetch error:", error);
+    } finally {
+      setLoadingAI(false);
     }
   };
 
@@ -174,11 +289,22 @@ export default function ScheduleScreen() {
     const evening: any[] = [];
 
     medicines.forEach(m => {
-      const h = parseInt(m.scheduled_time.split(":")[0]);
-      const isPM = m.scheduled_time.includes("PM");
-      if ((h >= 6 && h < 12 && !isPM) || (h === 12 && isPM)) morning.push(m);
-      else if ((h >= 12 && h < 5 && isPM) || (h === 12 && !isPM)) afternoon.push(m);
-      else evening.push(m);
+      const timeStr = m.scheduled_time; // Expected "HH:MM AM/PM"
+      const isPM = timeStr.includes("PM");
+      const h = parseInt(timeStr.split(":")[0]);
+
+      // Morning: 12 AM (00:00) to 11:59 AM
+      if (!isPM || (h === 12 && !isPM)) {
+        morning.push(m);
+      }
+      // Afternoon: 12 PM to 4:59 PM
+      else if (isPM && (h === 12 || (h >= 1 && h < 5))) {
+        afternoon.push(m);
+      }
+      // Evening: 5 PM to 11:59 PM
+      else {
+        evening.push(m);
+      }
     });
 
     return { morning, afternoon, evening };
@@ -251,14 +377,15 @@ export default function ScheduleScreen() {
                 ))}
               </View>
 
-              {/* AI Suggestion (Static) */}
+              {/* AI Suggestion (Dynamic) */}
               <View style={styles.aiCard}>
                 <View style={styles.aiCardLeft}>
                   <MaterialCommunityIcons name="robot-happy-outline" size={18 * fontSizeMultiplier} color={theme.colors.primaryAccent} />
                   <Text style={[styles.aiCardTitle, { fontSize: 13 * fontSizeMultiplier }]}>AI Suggestion</Text>
+                  {loadingAI && <ActivityIndicator size="small" color={theme.colors.primaryAccent} style={{ marginLeft: 8 }} />}
                 </View>
                 <Text style={[styles.aiCardText, { fontSize: 12 * fontSizeMultiplier }]}>
-                  Your adherence is improving! Consistency in the morning helps maintain stable blood levels of your medications.
+                  {aiSuggestion || "Analyzing your profile for personalized suggestions..."}
                 </Text>
               </View>
 
@@ -322,7 +449,7 @@ export default function ScheduleScreen() {
                   <Switch value={notificationsEnabled} onValueChange={toggleNotifications} trackColor={{ false: theme.colors.border, true: theme.colors.primary }} thumbColor="white" />
                 </View>
                 <View style={styles.divider} />
-                
+
                 {/* Voice Reminders */}
                 <View style={styles.toggleRow}>
                   <View style={styles.toggleLeft}>
@@ -355,17 +482,17 @@ export default function ScheduleScreen() {
             <>
               {/* Stats row */}
               <View style={styles.statsRow}>
-                <View style={styles.statCard}>
+                <View style={[styles.statCard, elderlyMode && styles.statCardElderly]}>
                   <Ionicons name="flame-outline" size={18 * fontSizeMultiplier} color={theme.colors.secondary} />
                   <Text style={[styles.statValue, { fontSize: 20 * fontSizeMultiplier }]}>12</Text>
                   <Text style={[styles.statLabel, { fontSize: 11 * fontSizeMultiplier }]}>Day Streak</Text>
                 </View>
-                <View style={styles.statCard}>
+                <View style={[styles.statCard, elderlyMode && styles.statCardElderly]}>
                   <Feather name="check-circle" size={18 * fontSizeMultiplier} color={theme.colors.success} />
-                  <Text style={[styles.statValue, { fontSize: 20 * fontSizeMultiplier }]}>{weeklyData.daily_summaries[weeklyData.daily_summaries.length-1]?.taken_count || 0}</Text>
+                  <Text style={[styles.statValue, { fontSize: 20 * fontSizeMultiplier }]}>{weeklyData.daily_summaries[weeklyData.daily_summaries.length - 1]?.taken_count || 0}</Text>
                   <Text style={[styles.statLabel, { fontSize: 11 * fontSizeMultiplier }]}>Taken Today</Text>
                 </View>
-                <View style={styles.statCard}>
+                <View style={[styles.statCard, elderlyMode && styles.statCardElderly]}>
                   <Feather name="trending-up" size={18 * fontSizeMultiplier} color={theme.colors.primaryAccent} />
                   <Text style={[styles.statValue, { fontSize: 20 * fontSizeMultiplier }]}>{Math.round(weeklyData.overall_adherence_pct)}%</Text>
                   <Text style={[styles.statLabel, { fontSize: 11 * fontSizeMultiplier }]}>Adherence</Text>
@@ -373,7 +500,7 @@ export default function ScheduleScreen() {
               </View>
 
               {/* Weekly chart card */}
-              <View style={styles.chartCard}>
+              <View style={[styles.chartCard, elderlyMode && styles.chartCardElderly]}>
                 <View style={styles.chartHeader}>
                   <Text style={[styles.chartTitle, { fontSize: 14 * fontSizeMultiplier }]}>Weekly Adherence</Text>
                 </View>
@@ -381,15 +508,19 @@ export default function ScheduleScreen() {
                 <BarChart data={weeklyData.daily_summaries} />
               </View>
 
-              {/* Static Insights */}
-              <View style={styles.insightCard}>
+              {/* Dose Pattern Chart */}
+              <DosePattern data={weeklyData} />
+
+              {/* AI Insight (Dynamic) */}
+              <View style={[styles.insightCard, elderlyMode && styles.insightCardElderly]}>
                 <View style={styles.insightHeader}>
                   <MaterialCommunityIcons name="robot-happy-outline" size={16 * fontSizeMultiplier} color="#D97706" />
                   <Text style={[styles.insightTag, { fontSize: 11 * fontSizeMultiplier }]}>AI INSIGHT</Text>
+                  {loadingAI && <ActivityIndicator size="small" color="#D97706" style={{ marginLeft: 8 }} />}
                 </View>
-                <Text style={[styles.insightTitle, { fontSize: 15 * fontSizeMultiplier }]}>Great Consistency!</Text>
+                <Text style={[styles.insightTitle, { fontSize: 15 * fontSizeMultiplier }]}>Personalized Adherence Analysis</Text>
                 <Text style={[styles.insightText, { fontSize: 12 * fontSizeMultiplier }]}>
-                  Your adherence is higher than 85% of users. Keeping this pace will significantly improve your long-term health outcomes.
+                  {aiInsight || "Analyzing your dose history to predict patterns..."}
                 </Text>
               </View>
             </>
@@ -400,42 +531,42 @@ export default function ScheduleScreen() {
       {/* Notifications Modal */}
       <Modal visible={showNotifications} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-           <View style={styles.notifSheet}>
-              <View style={styles.handle} />
-              <View style={styles.notifHeader}>
-                 <Text style={styles.notifTitle}>Notifications</Text>
-                 <TouchableOpacity onPress={() => setShowNotifications(false)}>
-                    <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Done</Text>
-                 </TouchableOpacity>
-              </View>
-              <ScrollView>
-                 {todayData?.medicines.filter((m:any) => m.status === 'missed').map((m:any, i:number) => (
-                    <View key={i} style={styles.notifItem}>
-                       <View style={styles.missedIcon}>
-                          <Feather name="alert-circle" size={20} color={theme.colors.danger} />
-                       </View>
-                       <View style={{ flex: 1 }}>
-                          <Text style={styles.notifMsg}>Missed Dose: {m.medicine_name}</Text>
-                          <Text style={styles.notifTime}>Scheduled for {m.scheduled_time}</Text>
-                       </View>
-                    </View>
-                 ))}
-                 {todayData?.medicines.filter((m:any) => m.status === 'taken').map((m:any, i:number) => (
-                    <View key={i} style={styles.notifItem}>
-                       <View style={styles.takenIcon}>
-                          <Feather name="check" size={20} color={theme.colors.success} />
-                       </View>
-                       <View style={{ flex: 1 }}>
-                          <Text style={styles.notifMsg}>Took {m.medicine_name}</Text>
-                          <Text style={styles.notifTime}>Recorded at {new Date(m.taken_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                       </View>
-                    </View>
-                 ))}
-                 {(!todayData || todayData.medicines.length === 0) && (
-                    <Text style={styles.emptyNotif}>No recent notifications</Text>
-                 )}
-              </ScrollView>
-           </View>
+          <View style={styles.notifSheet}>
+            <View style={styles.handle} />
+            <View style={styles.notifHeader}>
+              <Text style={styles.notifTitle}>Notifications</Text>
+              <TouchableOpacity onPress={() => setShowNotifications(false)}>
+                <Text style={{ color: theme.colors.primary, fontWeight: '600' }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {todayData?.medicines.filter((m: any) => m.status === 'missed').map((m: any, i: number) => (
+                <View key={i} style={styles.notifItem}>
+                  <View style={styles.missedIcon}>
+                    <Feather name="alert-circle" size={20} color={theme.colors.danger} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.notifMsg}>Missed Dose: {m.medicine_name}</Text>
+                    <Text style={styles.notifTime}>Scheduled for {m.scheduled_time}</Text>
+                  </View>
+                </View>
+              ))}
+              {todayData?.medicines.filter((m: any) => m.status === 'taken').map((m: any, i: number) => (
+                <View key={i} style={styles.notifItem}>
+                  <View style={styles.takenIcon}>
+                    <Feather name="check" size={20} color={theme.colors.success} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.notifMsg}>Took {m.medicine_name}</Text>
+                    <Text style={styles.notifTime}>Recorded at {new Date(m.taken_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                  </View>
+                </View>
+              ))}
+              {(!todayData || todayData.medicines.length === 0) && (
+                <Text style={styles.emptyNotif}>No recent notifications</Text>
+              )}
+            </ScrollView>
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -449,7 +580,7 @@ const styles = StyleSheet.create({
   headerSub: { color: theme.colors.text.secondary, marginTop: 2 },
   headerIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.border, alignItems: "center", justifyContent: "center" },
   notifDot: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.danger, borderWidth: 1.5, borderColor: 'white' },
-  
+
   tabToggle: { flexDirection: "row", backgroundColor: theme.colors.border, borderRadius: 14, marginHorizontal: 20, marginBottom: 16, padding: 4 },
   tabToggleElderly: { backgroundColor: '#E2E8F0', padding: 6, borderRadius: 18 },
   tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 11 },
@@ -470,8 +601,23 @@ const styles = StyleSheet.create({
   aiCardTitle: { fontWeight: "700", color: theme.colors.primaryAccent },
   aiCardText: { color: "#1E40AF", lineHeight: 18 },
 
-  progressCard: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 14, marginBottom: 20, ...theme.shadows.sm },
-  progressCardElderly: { borderWidth: 2, borderColor: theme.colors.primary, shadowOpacity: 0, elevation: 0 },
+  progressCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 2 }
+    })
+  },
+  progressCardElderly: {
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderRadius: 16,
+  },
   progressRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
   progressLabel: { fontWeight: "600", color: theme.colors.primary },
   progressCount: { color: theme.colors.text.secondary },
@@ -482,8 +628,27 @@ const styles = StyleSheet.create({
   sectionTime: { fontWeight: "700", color: theme.colors.tabInactive, letterSpacing: 0.5 },
   sectionCount: { color: theme.colors.tabInactive },
 
-  medRow: { flexDirection: "row", alignItems: "center", backgroundColor: theme.colors.surface, borderRadius: 16, padding: 14, marginBottom: 10, shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 5, elevation: 1, gap: 12 },
-  medRowElderly: { padding: 18, borderWidth: 1.5, borderColor: theme.colors.border, shadowOpacity: 0, elevation: 0 },
+  medRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    gap: 12,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.03, shadowRadius: 5, shadowOffset: { width: 0, height: 1 } },
+      android: { elevation: 1 }
+    })
+  },
+  medRowElderly: {
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderRadius: 16,
+  },
   medIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
   medName: { fontWeight: "700", color: theme.colors.text.primary },
   medDose: { color: theme.colors.text.secondary, marginTop: 2 },
@@ -492,8 +657,23 @@ const styles = StyleSheet.create({
   checkCircleMissed: { backgroundColor: theme.colors.danger, borderColor: theme.colors.danger },
   checkCircleElderly: { width: 40, height: 40, borderRadius: 20 },
 
-  toggleCard: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 16, marginTop: 10, ...theme.shadows.sm },
-  toggleCardElderly: { borderWidth: 1.5, borderColor: theme.colors.primary, shadowOpacity: 0, elevation: 0 },
+  toggleCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 10,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 2 }
+    })
+  },
+  toggleCardElderly: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderRadius: 20,
+  },
   toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 },
   toggleLeft: { flexDirection: "row", alignItems: "center" },
   toggleTitle: { fontWeight: "600", color: theme.colors.text.primary },
@@ -501,13 +681,45 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: theme.colors.background, marginVertical: 8 },
 
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
-  statCard: { flex: 1, backgroundColor: theme.colors.surface, borderRadius: 16, padding: 14, alignItems: "center", gap: 4, ...theme.shadows.sm },
-  statCardElderly: { borderWidth: 1.5, borderColor: theme.colors.border, shadowOpacity: 0, elevation: 0 },
+  statCard: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+    gap: 4,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 2 }
+    })
+  },
+  statCardElderly: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderRadius: 16,
+  },
   statValue: { fontWeight: "800", color: theme.colors.primary },
   statLabel: { color: theme.colors.text.secondary },
 
-  chartCard: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 18, marginBottom: 14, ...theme.shadows.sm },
-  chartCardElderly: { borderWidth: 1.5, borderColor: theme.colors.border, shadowOpacity: 0, elevation: 0 },
+  chartCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 2 }
+    })
+  },
+  chartCardElderly: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderRadius: 20,
+  },
   chartHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
   chartTitle: { fontWeight: "700", color: theme.colors.text.primary },
   chartBig: { fontWeight: "800", color: theme.colors.primary, marginBottom: 12 },
@@ -517,11 +729,53 @@ const styles = StyleSheet.create({
   barFill: { width: "100%", borderRadius: 6 },
   barLabel: { fontSize: 10, color: theme.colors.tabInactive, marginTop: 4 },
 
-  insightCard: { backgroundColor: "#FFFBEB", borderRadius: 20, padding: 16, marginBottom: 14, borderLeftWidth: 3, borderLeftColor: "#D97706" },
+  insightCard: {
+    backgroundColor: "#FFFBEB",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: "#D97706"
+  },
+  insightCardElderly: {
+    borderWidth: 1.5,
+    borderColor: "#D97706",
+    borderRadius: 20,
+    borderLeftWidth: 8,
+  },
   insightHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
   insightTag: { fontWeight: "700", color: "#D97706", letterSpacing: 0.5 },
   insightTitle: { fontWeight: "700", color: theme.colors.text.primary, marginBottom: 6 },
   insightText: { color: "#78350F", lineHeight: 18, marginBottom: 12 },
+
+  patternCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 2 }
+    })
+  },
+  patternCardElderly: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderRadius: 20,
+  },
+  patternTitle: { fontWeight: "700", color: theme.colors.text.primary },
+  patternRow: { flexDirection: "row", alignItems: "center", marginBottom: 12, gap: 10 },
+  patternSlot: { color: theme.colors.text.secondary, width: 75, fontWeight: "500" },
+  dotRow: { flexDirection: "row", gap: 8, flex: 1, justifyContent: "space-between" },
+  dot: { width: 12, height: 12, borderRadius: 6 },
+  legendRow: { flexDirection: "row", marginTop: 8, paddingLeft: 85, justifyContent: "space-between" },
+  legendDay: { fontSize: 10, color: theme.colors.tabInactive, textAlign: "center", width: 12 },
+  legendLabels: { flexDirection: "row", gap: 16, marginTop: 16, justifyContent: "center", paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.background },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { color: theme.colors.text.secondary },
 
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   notifSheet: { backgroundColor: "white", borderTopLeftRadius: 32, borderTopRightRadius: 32, height: "70%", padding: 24 },

@@ -21,6 +21,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -33,6 +34,7 @@ export default function MedsScreen() {
   
   const [activeFilter, setActiveFilter] = useState("All");
   const [meds, setMeds] = useState<any[]>([]);
+  const [todayMeds, setTodayMeds] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Custom Modal Logic
@@ -96,11 +98,15 @@ export default function MedsScreen() {
     })
   ).current;
 
-  const fetchMeds = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/api/v1/medicines");
-      setMeds(response.data);
+      const [medsRes, todayRes] = await Promise.all([
+        api.get("/api/v1/medicines"),
+        api.get("/api/v1/track/today")
+      ]);
+      setMeds(medsRes.data);
+      setTodayMeds(todayRes.data?.medicines || []);
     } catch (error) {
       console.error("Fetch meds error:", error);
       Alert.alert("Error", "Failed to fetch medications");
@@ -111,7 +117,7 @@ export default function MedsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchMeds();
+      fetchData();
     }, [])
   );
 
@@ -127,7 +133,7 @@ export default function MedsScreen() {
           onPress: async () => {
             try {
               await api.delete(`/api/v1/medicines/${id}`);
-              fetchMeds();
+              fetchData();
             } catch (error) {
               Alert.alert("Error", "Failed to delete medicine");
             }
@@ -140,6 +146,19 @@ export default function MedsScreen() {
   const filtered = meds.filter((med) => {
     if (activeFilter === "Active") return med.duration_days > 0;
     if (activeFilter === "Refill Due") return med.duration_days < 3;
+    
+    // Taken: Find if ALL slots for today for this med are 'taken'
+    if (activeFilter === "Taken") {
+        const todayEntries = todayMeds.filter(tm => tm.medicine_id === med.id);
+        return todayEntries.length > 0 && todayEntries.every(tm => tm.status === 'taken');
+    }
+    
+    // Pending: Find if ANY slot for today for this med is 'pending' or 'missed'
+    if (activeFilter === "Pending") {
+        const todayEntries = todayMeds.filter(tm => tm.medicine_id === med.id);
+        return todayEntries.length > 0 && todayEntries.some(tm => tm.status !== 'taken');
+    }
+
     return true;
   });
 
@@ -167,17 +186,21 @@ export default function MedsScreen() {
       {/* ── Summary Strip ── */}
       <View style={[styles.summaryStrip, elderlyMode && styles.summaryStripElderly]}>
         <View style={styles.summaryItem}>
-          <Text style={[styles.summaryValue, { fontSize: 22 * fontSizeMultiplier }]}>{activeMeds}</Text>
-          <Text style={[styles.summaryLabel, { fontSize: 11 * fontSizeMultiplier }]}>Total</Text>
+          <Text style={[styles.summaryValue, elderlyMode && { color: theme.colors.primary }, { fontSize: 22 * fontSizeMultiplier }]}>{activeMeds}</Text>
+          <Text style={[styles.summaryLabel, elderlyMode && { color: theme.colors.text.secondary }, { fontSize: 11 * fontSizeMultiplier }]}>Total</Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text
-            style={[styles.summaryValue, refillDue > 0 && { color: elderlyMode ? theme.colors.danger : "#FCA5A5" }, { fontSize: 22 * fontSizeMultiplier }]}
+            style={[
+              styles.summaryValue, 
+              elderlyMode ? { color: refillDue > 0 ? theme.colors.danger : theme.colors.primary } : { color: refillDue > 0 ? "#FCA5A5" : theme.colors.surface },
+              { fontSize: 22 * fontSizeMultiplier }
+            ]}
           >
             {refillDue}
           </Text>
-          <Text style={[styles.summaryLabel, { fontSize: 11 * fontSizeMultiplier }]}>Refill Due</Text>
+          <Text style={[styles.summaryLabel, elderlyMode && { color: theme.colors.text.secondary }, { fontSize: 11 * fontSizeMultiplier }]}>Refill Due</Text>
         </View>
       </View>
 
@@ -271,7 +294,7 @@ export default function MedsScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.addMedCard, elderlyMode && { padding: 30 }]}
+          style={[styles.addMedCard, elderlyMode && styles.addMedCardElderly]}
           onPress={openModal}
         >
           <View style={[styles.addMedIcon, { width: 48 * fontSizeMultiplier, height: 48 * fontSizeMultiplier, borderRadius: 24 * fontSizeMultiplier }]}>
@@ -364,8 +387,26 @@ const styles = StyleSheet.create({
   filterText: { color: theme.colors.text.secondary, fontWeight: "500" },
   filterTextActive: { color: theme.colors.surface, fontWeight: "600" },
   list: { paddingHorizontal: 20, paddingBottom: 160, gap: 12 },
-  medCard: { backgroundColor: theme.colors.surface, borderRadius: 20, padding: 16, flexDirection: "row", alignItems: "center", gap: 14, ...theme.shadows.sm },
-  medCardElderly: { borderWidth: 1.5, borderColor: theme.colors.border, padding: 20 },
+  medCard: { 
+    backgroundColor: theme.colors.surface, 
+    borderRadius: 20, 
+    padding: 16, 
+    flexDirection: "row", 
+    alignItems: "center", 
+    gap: 14,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 2 }
+    })
+  },
+  medCardElderly: { 
+    borderWidth: 1.5, 
+    borderColor: theme.colors.border, 
+    padding: 20, 
+    shadowOpacity: 0, 
+    elevation: 0,
+    borderRadius: 20,
+  },
   medIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   medTopRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
   medName: { fontWeight: "700", color: theme.colors.text.primary },
@@ -376,7 +417,28 @@ const styles = StyleSheet.create({
   medRight: { alignItems: "center" },
   emptyState: { alignItems: "center", paddingTop: 60, gap: 12 },
   emptyText: { color: theme.colors.tabInactive },
-  addMedCard: { backgroundColor: "#EFF6FF", borderRadius: 20, padding: 20, alignItems: "center", borderWidth: 1.5, borderColor: "#BFDBFE", borderStyle: "dashed", gap: 6 },
+  addMedCard: { 
+    backgroundColor: "#EFF6FF", 
+    borderRadius: 20, 
+    padding: 20, 
+    alignItems: "center", 
+    borderWidth: 1.5, 
+    borderColor: "#BFDBFE", 
+    borderStyle: "dashed", 
+    gap: 6,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 2 } },
+      android: { elevation: 2 }
+    })
+  },
+  addMedCardElderly: {
+    padding: 30,
+    shadowOpacity: 0,
+    elevation: 0,
+    borderRadius: 20,
+    borderStyle: 'solid',
+    borderColor: theme.colors.border,
+  },
   addMedIcon: { backgroundColor: theme.colors.primaryLight, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   addMedText: { fontWeight: "700", color: theme.colors.primaryAccent },
   addMedSub: { color: theme.colors.text.secondary },

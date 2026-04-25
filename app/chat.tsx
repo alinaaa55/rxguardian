@@ -25,6 +25,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../constants/theme";
 import { chatService, PharmEasyResult } from "../services/chatService";
+import { useSettings } from "../context/SettingsContext";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -40,23 +41,24 @@ type UIMessage = {
 
 // ─── Medicine Action Card ──────────────────────────────────────────────────
 const MedicineChip = ({ result, onPress }: { result: PharmEasyResult, onPress: () => void }) => {
+  const { fontSizeMultiplier, elderlyMode } = useSettings();
   const firstImage = result.results[0]?.image;
 
   return (
-    <TouchableOpacity style={styles.medicineActionCard} onPress={onPress}>
+    <TouchableOpacity style={[styles.medicineActionCard, elderlyMode && styles.medicineActionCardElderly]} onPress={onPress}>
       <View style={styles.cardImageContainer}>
         {firstImage ? (
           <Image source={{ uri: firstImage }} style={styles.cardImage} />
         ) : (
-          <MaterialCommunityIcons name="pill" size={24} color={theme.colors.primaryAccent} />
+          <MaterialCommunityIcons name="pill" size={24 * fontSizeMultiplier} color={theme.colors.primaryAccent} />
         )}
       </View>
       <View style={styles.cardContent}>
-        <Text style={styles.cardTitle} numberOfLines={1}>{result.medicine}</Text>
-        <Text style={styles.cardSubtitle}>{result.results.length} options available</Text>
+        <Text style={[styles.cardTitle, { fontSize: 14 * fontSizeMultiplier }]} numberOfLines={1}>{result.medicine}</Text>
+        <Text style={[styles.cardSubtitle, { fontSize: 12 * fontSizeMultiplier }]}>{result.results.length} options available</Text>
       </View>
       <View style={styles.cardAction}>
-        <Feather name="arrow-right" size={18} color={theme.colors.primaryAccent} />
+        <Feather name="arrow-right" size={18 * fontSizeMultiplier} color={theme.colors.primaryAccent} />
       </View>
     </TouchableOpacity>
   );
@@ -147,6 +149,7 @@ const MessageBubble = ({
   onMedicinePress: (res: PharmEasyResult) => void,
   onImagePress: (uri: string) => void
 }) => {
+  const { fontSizeMultiplier, elderlyMode } = useSettings();
   const isUser = message.role === "user";
 
   const formatText = (text: string) =>
@@ -176,13 +179,13 @@ const MessageBubble = ({
         <View style={styles.avatarSmall}>
           <MaterialCommunityIcons
             name="robot-happy-outline"
-            size={16}
+            size={16 * fontSizeMultiplier}
             color={theme.colors.primaryAccent}
           />
         </View>
       )}
 
-      <View style={{ maxWidth: "78%" }}>
+      <View style={{ maxWidth: "82%" }}>
         <View style={{ gap: 4 }}>
           {message.imageUri && (
             <TouchableOpacity 
@@ -191,6 +194,7 @@ const MessageBubble = ({
               style={[
                 styles.bubble,
                 isUser ? styles.userBubble : styles.aiBubble,
+                elderlyMode && (isUser ? styles.userBubbleElderly : styles.aiBubbleElderly),
                 { padding: 6 },
               ]}
             >
@@ -207,12 +211,14 @@ const MessageBubble = ({
               style={[
                 styles.bubble,
                 isUser ? styles.userBubble : styles.aiBubble,
+                elderlyMode && (isUser ? styles.userBubbleElderly : styles.aiBubbleElderly),
               ]}
             >
               <Text
                 style={[
                   styles.bubbleText,
                   isUser ? styles.userText : styles.aiText,
+                  { fontSize: 14.5 * fontSizeMultiplier }
                 ]}
               >
                 {formatText(message.text)}
@@ -237,7 +243,7 @@ const MessageBubble = ({
           style={[
             styles.timestamp,
             isUser ? { textAlign: 'right', alignSelf: 'flex-end', marginRight: 4 } : { textAlign: 'left', alignSelf: 'flex-start', marginLeft: 4 },
-            { marginTop: 4 }
+            { marginTop: 4, fontSize: 10 * fontSizeMultiplier }
           ]}
         >
           {timeStr}
@@ -246,7 +252,7 @@ const MessageBubble = ({
 
       {isUser && (
         <View style={styles.userAvatarSmall}>
-          <Ionicons name="person" size={14} color={theme.colors.surface} />
+          <Ionicons name="person" size={14 * fontSizeMultiplier} color={theme.colors.surface} />
         </View>
       )}
     </View>
@@ -257,6 +263,7 @@ const MessageBubble = ({
 export default function ChatScreen() {
   const router = useRouter();
   const flatRef = useRef<FlatList>(null);
+  const { fontSizeMultiplier, elderlyMode } = useSettings();
 
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
@@ -440,28 +447,28 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safe, elderlyMode && { backgroundColor: "#fff" }]} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" />
 
       {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={22} color={theme.colors.primary} />
+          <Ionicons name="chevron-back" size={22 * fontSizeMultiplier} color={theme.colors.primary} />
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
           <View style={styles.headerAvatar}>
             <MaterialCommunityIcons
               name="robot-happy-outline"
-              size={22}
+              size={22 * fontSizeMultiplier}
               color={theme.colors.surface}
             />
           </View>
           <View>
-            <Text style={styles.headerTitle}>RxGuardian AI</Text>
+            <Text style={[styles.headerTitle, { fontSize: 16 * fontSizeMultiplier }]}>RxGuardian AI</Text>
             <View style={styles.onlineRow}>
               <View style={styles.onlineDot} />
-              <Text style={styles.onlineText}>Online now</Text>
+              <Text style={[styles.onlineText, { fontSize: 12 * fontSizeMultiplier }]}>Online now</Text>
             </View>
           </View>
         </View>
@@ -469,7 +476,7 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={handleNewChat} style={styles.newChatBtn}>
           <MaterialCommunityIcons
             name="chat-plus-outline"
-            size={22}
+            size={22 * fontSizeMultiplier}
             color={theme.colors.primary}
           />
         </TouchableOpacity>
@@ -484,7 +491,7 @@ export default function ChatScreen() {
         {loadingHistory ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Loading chat history...</Text>
+            <Text style={[styles.loadingText, { fontSize: 14 * fontSizeMultiplier }]}>Loading chat history...</Text>
           </View>
         ) : (
           <FlatList
@@ -509,11 +516,11 @@ export default function ChatScreen() {
             {pendingImage && (
             <View style={styles.pendingImageRow}>
             <Image source={{ uri: pendingImage }} style={styles.pendingThumb} />
-            <Text style={styles.pendingLabel}>Image ready to send</Text>
+            <Text style={[styles.pendingLabel, { fontSize: 13 * fontSizeMultiplier }]}>Image ready to send</Text>
             <TouchableOpacity onPress={() => setPendingImage(null)}>
               <Ionicons
                 name="close-circle"
-                size={20}
+                size={20 * fontSizeMultiplier}
                 color={theme.colors.text.secondary}
               />
             </TouchableOpacity>
@@ -526,13 +533,13 @@ export default function ChatScreen() {
             <TouchableOpacity onPress={pickImage} style={styles.iconBtn}>
               <Ionicons
                 name="add-circle-outline"
-                size={26}
+                size={26 * fontSizeMultiplier}
                 color={theme.colors.tabInactive}
               />
             </TouchableOpacity>
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { fontSize: 14.5 * fontSizeMultiplier }]}
               placeholder="Type a message…"
               placeholderTextColor={theme.colors.tabInactive}
               value={input}
@@ -542,7 +549,7 @@ export default function ChatScreen() {
             />
 
             <TouchableOpacity onPress={takePicture} style={styles.iconBtn}>
-              <Feather name="camera" size={22} color={theme.colors.tabInactive} />
+              <Feather name="camera" size={22 * fontSizeMultiplier} color={theme.colors.tabInactive} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -553,7 +560,7 @@ export default function ChatScreen() {
               ]}
               disabled={!input.trim() && !pendingImage}
             >
-              <Ionicons name="send" size={17} color={theme.colors.surface} />
+              <Ionicons name="send" size={17 * fontSizeMultiplier} color={theme.colors.surface} />
             </TouchableOpacity>
             </View>
             </SafeAreaView>
@@ -570,16 +577,16 @@ export default function ChatScreen() {
             style={styles.modalOverlay}
             onPress={() => setSheetVisible(false)}
             />
-            <View style={styles.bottomSheet}>
+            <View style={[styles.bottomSheet, elderlyMode && styles.bottomSheetElderly]}>
             <View style={styles.sheetHeader}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetTitleRow}>
-              <Text style={styles.sheetTitle}>PharmEasy Results</Text>
+              <Text style={[styles.sheetTitle, { fontSize: 20 * fontSizeMultiplier }]}>PharmEasy Results</Text>
               <TouchableOpacity onPress={() => setSheetVisible(false)}>
-                <Ionicons name="close-circle" size={24} color={theme.colors.text.secondary} />
+                <Ionicons name="close-circle" size={24 * fontSizeMultiplier} color={theme.colors.text.secondary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.sheetSubtitle}>Search results for: {selectedMedicine?.medicine}</Text>
+            <Text style={[styles.sheetSubtitle, { fontSize: 14 * fontSizeMultiplier }]}>Search results for: {selectedMedicine?.medicine}</Text>
             </View>
 
             <ScrollView
@@ -589,13 +596,13 @@ export default function ChatScreen() {
             {selectedMedicine?.results.map((item, index) => (
               <TouchableOpacity
                 key={index}
-                style={styles.resultItem}
+                style={[styles.resultItem, elderlyMode && styles.resultItemElderly]}
                 onPress={() => Linking.openURL(item.url)}
               >
                 <Image source={{ uri: item.image }} style={styles.resultImage} />
                 <View style={styles.resultInfo}>
-                  <Text style={styles.resultName} numberOfLines={2}>{item.title}</Text>
-                  <Text style={styles.buyText}>Buy Now on PharmEasy →</Text>
+                  <Text style={[styles.resultName, { fontSize: 14 * fontSizeMultiplier }]} numberOfLines={2}>{item.title}</Text>
+                  <Text style={[styles.buyText, { fontSize: 13 * fontSizeMultiplier }]}>Buy Now on PharmEasy →</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -615,7 +622,7 @@ export default function ChatScreen() {
             style={styles.previewClose}
             onPress={() => setPreviewImage(null)}
             >
-            <Ionicons name="close" size={30} color={theme.colors.surface} />
+            <Ionicons name="close" size={30 * fontSizeMultiplier} color={theme.colors.surface} />
             </TouchableOpacity>
 
             {previewImage && (
@@ -725,6 +732,10 @@ export default function ChatScreen() {
             backgroundColor: theme.colors.primary,
             borderBottomRightRadius: 4,
             },
+            userBubbleElderly: {
+              shadowOpacity: 0,
+              elevation: 0,
+            },
             aiBubble: {
             backgroundColor: theme.colors.surface,
             borderBottomLeftRadius: 4,
@@ -735,6 +746,12 @@ export default function ChatScreen() {
             shadowRadius: 4,
             shadowOffset: { width: 0, height: 1 },
             elevation: 1,
+            },
+            aiBubbleElderly: {
+              borderWidth: 1.5,
+              borderColor: theme.colors.border,
+              shadowOpacity: 0,
+              elevation: 0,
             },
             bubbleText: { fontSize: 14.5, lineHeight: 21 },
             userText: { color: theme.colors.surface },
@@ -762,6 +779,13 @@ export default function ChatScreen() {
             borderWidth: 1,
             borderColor: theme.colors.border,
             ...theme.shadows.sm,
+            },
+            medicineActionCardElderly: {
+              borderWidth: 1.5,
+              borderColor: theme.colors.border,
+              shadowOpacity: 0,
+              elevation: 0,
+              padding: 16,
             },
             cardImageContainer: {
             width: 50,
@@ -815,6 +839,12 @@ export default function ChatScreen() {
             paddingTop: 12,
             ...theme.shadows.lg,
             },
+            bottomSheetElderly: {
+              shadowOpacity: 0,
+              elevation: 0,
+              borderTopWidth: 2,
+              borderTopColor: theme.colors.primary,
+            },
             sheetHeader: {
             paddingHorizontal: 24,
             paddingBottom: 16,
@@ -858,6 +888,13 @@ export default function ChatScreen() {
             ...theme.shadows.sm,
             borderWidth: 1,
             borderColor: theme.colors.border,
+            },
+            resultItemElderly: {
+              borderWidth: 1.5,
+              borderColor: theme.colors.border,
+              shadowOpacity: 0,
+              elevation: 0,
+              padding: 16,
             },
             resultImage: {
             width: 60,
@@ -974,5 +1011,3 @@ export default function ChatScreen() {
             height: '80%',
             },
             });
-
-

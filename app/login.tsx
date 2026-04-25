@@ -30,7 +30,10 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async () => {
-    if (!email || !password || (!isLogin && !name)) {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password; // Usually passwords shouldn't be trimmed, but leading/trailing spaces are a common mobile issue. I'll stick to trimming email and fixing input props.
+
+    if (!trimmedEmail || !password || (!isLogin && !name.trim())) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
@@ -38,9 +41,9 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (isLogin) {
-        await authService.login(email, password);
+        await authService.login(trimmedEmail, password);
       } else {
-        await authService.register(name, email, password);
+        await authService.register(name.trim(), trimmedEmail, password);
       }
 
       // Check if profile is complete
