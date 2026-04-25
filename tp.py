@@ -1,31 +1,16 @@
 text = """
-from pydantic import BaseModel, Field
-from typing import List, Optional, Any
-from datetime import datetime
-import uuid
+async getSideEffects(medicine: { name: string; dosage: string; instructions: string }): Promise<AIResponse> {
+    const response = await api.post('/api/v1/ai/side-effects', {
+      medicine: {
+        name: medicine.name,
+        dosage: medicine.dosage,
+        instructions: medicine.instructions
+      }
+    });
+    return response.data;
+  }
 
-class AIMessage(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    message: str # AI generated text (Markdown supported)
-    sender: str = "assistant"
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
-
-class AIResponse(BaseModel):
-    ""Unified response for all 3 AI routes""
-    bot_message: AIMessage
-
-class InteractionAlertRequest(BaseModel):
-    new_medicine: dict
-    user_profile: dict  # allergies, blood group
-    current_medications: List[dict]
-
-class AISuggestionsRequest(BaseModel):
-    user_profile: dict
-    full_medication_list: List[dict]
-
-class AIInsightsRequest(BaseModel):
-    weekly_tracking_history: List[dict]
-    medication_list: List[dict]
+  basically we need to create a route that takes this as input and returns the side effects of the medicine. The input will be a JSON object with the name, dosage, and instructions of the medicine. The output will be a JSON object with the side effects of the medicine. We will be again using qwen2.5:3b model which is sestuped already.
 """
 
 # Remove newline characters

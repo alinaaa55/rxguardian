@@ -85,6 +85,58 @@ export default function HomeScreen() {
     }, [])
   );
 
+  const formatText = (text: string) => {
+    if (!text) return null;
+    
+    // Clean up markdown markers (###, **), code blocks, and "Markdown:" labels
+    let cleanText = text
+      .replace(/```markdown\n?/g, "")
+      .replace(/```\n?/g, "")
+      .replace(/^Markdown:\s*\n?/i, "")
+      .trim();
+    
+    const lines = cleanText.split("\n");
+    
+    return lines.map((line, lineIdx) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine && lineIdx !== lines.length - 1) return <Text key={lineIdx}>{"\n"}</Text>;
+
+      // Check for headers (###)
+      if (trimmedLine.startsWith("###")) {
+        const headerText = trimmedLine.replace(/^###\s*/, "");
+        return (
+          <Text key={`line-${lineIdx}`} style={{ fontWeight: "800", fontSize: 16 * fontSizeMultiplier, marginTop: 12, marginBottom: 4, color: theme.colors.text.primary }}>
+            {headerText}
+            {"\n"}
+          </Text>
+        );
+      }
+
+      // Check for bullet points
+      let displayLine = line;
+      if (trimmedLine.startsWith("- ")) {
+        displayLine = line.replace("- ", "• ");
+      }
+
+      // Handle bolding within the line
+      const parts = displayLine.split("**");
+      return (
+        <Text key={`line-${lineIdx}`} style={{ lineHeight: 22 * fontSizeMultiplier }}>
+          {parts.map((part, i) =>
+            i % 2 === 1 ? (
+              <Text key={i} style={{ fontWeight: "700", color: theme.colors.text.primary }}>
+                {part}
+              </Text>
+            ) : (
+              <Text key={i}>{part}</Text>
+            )
+          )}
+          {"\n"}
+        </Text>
+      );
+    });
+  };
+
   const adherence = todayData?.adherence_pct ? Math.round(todayData.adherence_pct) : 0;
   const todayMeds = todayData?.medicines?.slice(0, 3) || [];
 
@@ -200,7 +252,7 @@ export default function HomeScreen() {
               <Text style={[styles.alertText, { fontSize: 12 * fontSizeMultiplier }, interactionResult && !interactionResult.includes('⚠️') && { color: theme.colors.text.primary }]}>
                 {loadingAI 
                   ? "Analyzing your medications for safety..." 
-                  : interactionResult || "No interactions detected in your current regimen. Stay safe!"}
+                  : formatText(interactionResult || "No interactions detected in your current regimen. Stay safe!")}
               </Text>
             </View>
           </View>

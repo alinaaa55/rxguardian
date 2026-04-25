@@ -1,21 +1,22 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Alert,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../constants/theme";
-import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
-import api from "../services/api";
 import { useSettings } from "../context/SettingsContext";
+import { aiService } from "../services/aiService";
+import api from "../services/api";
 
 export default function MedicineDetails() {
   const router = useRouter();
@@ -23,6 +24,10 @@ export default function MedicineDetails() {
   const { fontSizeMultiplier, elderlyMode } = useSettings();
   const [medData, setMedData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const [sideEffects, setSideEffects] = useState<string | null>(null);
+  const [fetchingSideEffects, setFetchingSideEffects] = useState(false);
+  const [showSideEffects, setShowSideEffects] = useState(false);
 
   const id = params.id as string;
 
@@ -37,6 +42,29 @@ export default function MedicineDetails() {
       setLoading(false);
     }
   }, [id]);
+
+  const handleFetchSideEffects = async () => {
+    if (sideEffects) {
+      setShowSideEffects(!showSideEffects);
+      return;
+    }
+
+    try {
+      setFetchingSideEffects(true);
+      setShowSideEffects(true);
+      const res = await aiService.getSideEffects({
+        name: medData.name,
+        dosage: medData.dosage,
+        instructions: medData.instructions
+      });
+      setSideEffects(res.bot_message.message);
+    } catch (error) {
+      Alert.alert("Error", "Failed to fetch side effects");
+      setShowSideEffects(false);
+    } finally {
+      setFetchingSideEffects(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -58,10 +86,10 @@ export default function MedicineDetails() {
 
   const handleToggleTaken = async () => {
     try {
-       await api.post("/api/v1/track/take", { medicine_id: id });
-       Alert.alert("Success", "Marked as taken for today!");
+      await api.post("/api/v1/track/take", { medicine_id: id });
+      Alert.alert("Success", "Marked as taken for today!");
     } catch (error) {
-       Alert.alert("Error", "Failed to mark as taken");
+      Alert.alert("Error", "Failed to mark as taken");
     }
   };
 
@@ -71,8 +99,8 @@ export default function MedicineDetails() {
       `Are you sure you want to remove ${name}?`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
+        {
+          text: "Delete",
           style: "destructive",
           onPress: async () => {
             try {
@@ -91,6 +119,58 @@ export default function MedicineDetails() {
     router.push({
       pathname: "/add-med",
       params: { id },
+    });
+  };
+
+  const formatText = (text: string) => {
+    if (!text) return null;
+
+    // Clean up markdown markers (###, **), code blocks, and "Markdown:" labels
+    let cleanText = text
+      .replace(/```markdown\n?/g, "")
+      .replace(/```\n?/g, "")
+      .replace(/^Markdown:\s*\n?/i, "")
+      .trim();
+
+    const lines = cleanText.split("\n");
+
+    return lines.map((line, lineIdx) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine && lineIdx !== lines.length - 1) return <Text key={lineIdx}>{"\n"}</Text>;
+
+      // Check for headers (###)
+      if (trimmedLine.startsWith("###")) {
+        const headerText = trimmedLine.replace(/^###\s*/, "");
+        return (
+          <Text key={`line-${lineIdx}`} style={{ fontWeight: "800", fontSize: 16 * fontSizeMultiplier, marginTop: 12, marginBottom: 4, color: theme.colors.text.primary }}>
+            {headerText}
+            {"\n"}
+          </Text>
+        );
+      }
+
+      // Check for bullet points
+      let displayLine = line;
+      if (trimmedLine.startsWith("- ")) {
+        displayLine = line.replace("- ", "• ");
+      }
+
+      // Handle bolding within the line
+      const parts = displayLine.split("**");
+      return (
+        <Text key={`line-${lineIdx}`} style={{ lineHeight: 22 * fontSizeMultiplier, color: theme.colors.text.secondary }}>
+          {parts.map((part, i) =>
+            i % 2 === 1 ? (
+              <Text key={i} style={{ fontWeight: "700", color: theme.colors.text.primary }}>
+                {part}
+              </Text>
+            ) : (
+              <Text key={i}>{part}</Text>
+            )
+          )}
+          {"\n"}
+        </Text>
+      );
     });
   };
 
@@ -125,7 +205,7 @@ export default function MedicineDetails() {
         {/* TITLE */}
         <View style={styles.titleSection}>
           <View style={[styles.medIconLarge, { backgroundColor: bgColor || theme.colors.primaryLight }]}>
-             <MaterialCommunityIcons name={(icon as any) || "pill"} size={40 * fontSizeMultiplier} color={color || theme.colors.primaryAccent} />
+            <MaterialCommunityIcons name={(icon as any) || "pill"} size={40 * fontSizeMultiplier} color={color || theme.colors.primaryAccent} />
           </View>
           <Text style={[styles.medTitle, { fontSize: 28 * fontSizeMultiplier }]}>{name}</Text>
           <Text style={[styles.subtitle, { fontSize: 16 * fontSizeMultiplier }]}>{dosage} • {frequency}</Text>
@@ -148,28 +228,38 @@ export default function MedicineDetails() {
 
         {/* INSTRUCTIONS */}
         <View style={[styles.instructionCard, elderlyMode && styles.cardElderly]}>
-           <Feather name="info" size={22 * fontSizeMultiplier} color={theme.colors.secondary} />
-           <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.cardLabel, { fontSize: 11 * fontSizeMultiplier }]}>Instructions</Text>
-              <Text style={[styles.cardValue, { fontSize: 14 * fontSizeMultiplier }]}>{instructions || "No specific instructions"}</Text>
-           </View>
-        </View>
-
-        {/* INTERACTION RISK */}
-        <View style={[styles.interactionCard, elderlyMode && styles.cardElderly]}>
-          <Text style={[styles.sectionTitle, { fontSize: 14 * fontSizeMultiplier }]}>Interaction Risk</Text>
-          <Text style={[styles.lowRisk, { fontSize: 15 * fontSizeMultiplier }]}>✔ Low Risk</Text>
-          <Text style={[styles.riskText, { fontSize: 12 * fontSizeMultiplier }]}>
-            Safe to take with your current medication stack.
-          </Text>
+          <Feather name="info" size={22 * fontSizeMultiplier} color={theme.colors.secondary} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={[styles.cardLabel, { fontSize: 11 * fontSizeMultiplier }]}>Instructions</Text>
+            <Text style={[styles.cardValue, { fontSize: 14 * fontSizeMultiplier }]}>{instructions || "No specific instructions"}</Text>
+          </View>
         </View>
 
         {/* SIDE EFFECTS */}
-        <TouchableOpacity style={[styles.sideCard, elderlyMode && styles.cardElderly]}>
+        <TouchableOpacity
+          style={[styles.sideCard, elderlyMode && styles.cardElderly]}
+          onPress={handleFetchSideEffects}
+        >
           <Ionicons name="warning-outline" size={22 * fontSizeMultiplier} color={theme.colors.danger} />
           <Text style={[styles.sideText, { fontSize: 15 * fontSizeMultiplier }]}>Common Side Effects</Text>
-          <Feather name="chevron-down" size={20 * fontSizeMultiplier} color={theme.colors.tabInactive} />
+          <Feather
+            name={showSideEffects ? "chevron-up" : "chevron-down"}
+            size={20 * fontSizeMultiplier}
+            color={theme.colors.tabInactive}
+          />
         </TouchableOpacity>
+
+        {showSideEffects && (
+          <View style={[styles.sideEffectsContent, elderlyMode && styles.cardElderly]}>
+            {fetchingSideEffects ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Text style={[styles.sideEffectsText, { fontSize: 14 * fontSizeMultiplier }]}>
+                {formatText(sideEffects || "No side effects information available.")}
+              </Text>
+            )}
+          </View>
+        )}
 
         <View style={{ height: 120 }} />
       </ScrollView>
@@ -180,8 +270,8 @@ export default function MedicineDetails() {
           <Text style={[styles.refillText, { fontSize: 15 * fontSizeMultiplier }]}>Refill</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.takenBtn} 
+        <TouchableOpacity
+          style={styles.takenBtn}
           onPress={handleToggleTaken}
         >
           <Feather name="check" size={18 * fontSizeMultiplier} color="white" />
@@ -258,6 +348,17 @@ const styles = StyleSheet.create({
     ...theme.shadows.sm,
   },
   sideText: { flex: 1, marginLeft: 10, fontWeight: "600", color: theme.colors.text.primary },
+  sideEffectsContent: {
+    backgroundColor: theme.colors.surface,
+    padding: 20,
+    borderRadius: 22,
+    marginTop: 10,
+    ...theme.shadows.sm,
+  },
+  sideEffectsText: {
+    color: theme.colors.text.secondary,
+    lineHeight: 20,
+  },
   bottomContainer: { position: "absolute", bottom: 20, left: 20, right: 20, flexDirection: "row", justifyContent: "space-between" },
   refillBtn: { backgroundColor: theme.colors.border, paddingVertical: 16, paddingHorizontal: 30, borderRadius: 24, justifyContent: 'center' },
   refillText: { fontWeight: "600", color: theme.colors.text.primary },

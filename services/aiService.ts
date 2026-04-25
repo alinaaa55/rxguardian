@@ -86,5 +86,21 @@ export const aiService = {
       }))
     });
     return response.data;
+  },
+
+  /**
+   * 4. Side Effects
+   * Backend expects:
+   * - medicine: dict
+   */
+  async getSideEffects(medicine: { name: string; dosage: string; instructions: string }): Promise<AIResponse> {
+    const response = await api.post('/api/v1/ai/side-effects', {
+      medicine: {
+        name: medicine.name,
+        dosage: medicine.dosage,
+        instructions: medicine.instructions
+      }
+    });
+    return response.data;
   }
 };
