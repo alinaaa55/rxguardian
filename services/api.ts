@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as storage from './storage';
 
-const API_URL = 'https://coletta-snouted-rigoberto.ngrok-free.dev';
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const api = axios.create({
   baseURL: API_URL,

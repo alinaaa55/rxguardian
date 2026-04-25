@@ -48,17 +48,27 @@ export default function HomeScreen() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [user, tracking, meds] = await Promise.all([
+      const [user, tracking] = await Promise.all([
         storage.getUserInfo(),
-        api.get("/api/v1/track/today"),
-        storage.getMeds()
+        api.get("/api/v1/track/today")
       ]);
       if (user?.name) setUserName(user.name.split(' ')[0]);
       setTodayData(tracking.data);
 
       // Trigger AI Interaction check for current regimen
-      if (meds.length > 0) {
-        fetchInteractionCheck(meds[0].name);
+      // We use the medicines from the tracking API as they are fresh
+      if (tracking.data?.medicines && tracking.data.medicines.length > 0) {
+        // We pass the list of medicine names to check for interactions among them
+        const medNames = tracking.data.medicines.map((m: any) => m.medicine_name).join(", ");
+        
+        // Map today's meds to the format aiService expects
+        const currentMeds = tracking.data.medicines.map((m: any) => ({
+          name: m.medicine_name,
+          dosage: m.dosage || "As prescribed",
+          instructions: m.instructions || ""
+        }));
+
+        fetchInteractionCheck(medNames, currentMeds);
       }
     } catch (error) {
       console.error("Home load error:", error);
@@ -67,10 +77,10 @@ export default function HomeScreen() {
     }
   };
 
-  const fetchInteractionCheck = async (medName: string) => {
+  const fetchInteractionCheck = async (medNames: string, currentMeds: any[]) => {
     try {
       setLoadingAI(true);
-      const res = await aiService.getInteractionAlert(medName);
+      const res = await aiService.getInteractionAlert(medNames, currentMeds);
       setInteractionResult(res.bot_message.message);
     } catch (err) {
       console.error("AI Interaction check error:", err);
