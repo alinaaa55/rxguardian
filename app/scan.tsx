@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,8 +16,29 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import api from "../services/api";
+import { theme, palette } from "../constants/theme";
+import { notificationService } from "../services/notificationService";
 
-const API_BASE = "http://192.168.1.5:8000";
+const ICON_OPTIONS = [
+  { icon: "pill", label: "Pill" },
+  { icon: "white-balance-sunny", label: "Vitamin" },
+  { icon: "heart-pulse", label: "Heart" },
+  { icon: "needle", label: "Injection" },
+  { icon: "eyedrop", label: "Drops" },
+  { icon: "bottle-tonic", label: "Syrup" },
+  { icon: "bandage", label: "Bandage" },
+  { icon: "flask-outline", label: "Liquid" },
+];
+
+const COLOR_OPTIONS = [
+  { color: palette.primary.accent, bg: palette.primary.light },
+  { color: palette.secondary.main, bg: palette.secondary.light },
+  { color: "#EAB308", bg: "#FEF9C3" },
+  { color: palette.danger.accent, bg: palette.danger.light },
+  { color: "#7C3AED", bg: "#EDE9FE" },
+  { color: palette.success.main, bg: palette.success.light },
+];
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -28,31 +49,53 @@ export default function ScanScreen() {
   const [capturing, setCapturing] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [result, setResult] = useState<any>(null);
+  const [detectedMedicines, setDetectedMedicines] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [showResult, setShowResult] = useState(false);
 
   // Editable fields
   const [medicineName, setMedicineName] = useState("");
   const [dosage, setDosage] = useState("");
-  const [form, setForm] = useState("");
-  const [frequency, setFrequency] = useState("");
-  const [confidence, setConfidence] = useState<number | null>(null);
-  const [sourceFile, setSourceFile] = useState("Scanned_Rx_001.jpg");
+  const [instructions, setInstructions] = useState("");
+  const [durationDays, setDurationDays] = useState("7");
+  const [frequencySlots, setFrequencySlots] = useState({
+    morning: false,
+    afternoon: false,
+    evening: false,
+  });
+  const [timeSlots, setTimeSlots] = useState({
+    morning: "08:00 AM",
+    afternoon: "02:00 PM",
+    evening: "08:00 PM",
+  });
+  const [selectedIcon, setSelectedIcon] = useState("pill");
+  const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
+
+  const [showTimePicker, setShowTimePicker] = useState<{
+    slot: "morning" | "afternoon" | "evening";
+    visible: boolean;
+  }>({ slot: "morning", visible: false });
 
   useEffect(() => {
     handleOpenCamera();
   }, []);
 
-  // Populate fields when result arrives
-  useEffect(() => {
-    if (result) {
-      setMedicineName(result.medicine_name ?? result.name ?? "");
-      setDosage(result.dosage ?? "");
-      setForm(result.form ?? result.drug_form ?? "");
-      setFrequency(result.frequency ?? "");
-      setConfidence(result.confidence ?? result.match_score ?? null);
-    }
-  }, [result]);
+  const populateFields = (med: any) => {
+    setMedicineName(med.name || "");
+    setDosage(med.dosage || "");
+    setInstructions(med.instructions || "");
+    
+    // Parse frequency X-X-X
+    const freq = med.frequency || "1-0-1";
+    const parts = freq.split("-");
+    setFrequencySlots({
+      morning: parts[0] === "1",
+      afternoon: parts[1] === "1",
+      evening: parts[2] === "1",
+    });
+    setSelectedIcon("pill");
+    setSelectedColor(COLOR_OPTIONS[0]);
+  };
 
   const handleOpenCamera = async () => {
     if (!permission?.granted) {
@@ -70,18 +113,11 @@ export default function ScanScreen() {
 
     setCapturing(true);
     try {
-      await cameraRef.current.takePictureAsync({ quality: 0.8 });
-      setShowCamera(false);
-
-      // ── MOCK DATA for UI testing ──
-      setResult({
-        medicine_name: "Amoxicillin",
-        dosage: "500mg",
-        form: "Tablet",
-        frequency: "Twice daily",
-        confidence: 0.92,
-      });
-      setShowResult(true);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      if (photo) {
+        setShowCamera(false);
+        await sendToAPI(photo.uri);
+      }
     } catch {
       Alert.alert("Error", "Failed to capture image");
     } finally {
@@ -101,8 +137,7 @@ export default function ScanScreen() {
     });
     if (!picked.canceled) {
       const uri = picked.assets[0].uri;
-      const filename = uri.split("/").pop() ?? "image.jpg";
-      setSourceFile(filename);
+      setShowCamera(false);
       await sendToAPI(uri);
     }
   };
@@ -114,34 +149,124 @@ export default function ScanScreen() {
       formData.append("file", {
         uri,
         type: "image/jpeg",
-        name: "image.jpg",
+        name: "prescription.jpg",
       } as any);
-      const res = await fetch(`${API_BASE}/prescriptions/parse-image`, {
-        method: "POST",
-        body: formData,
+
+      const response = await api.post("/api/v1/medicines/scan-only", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
-      const data = await res.json();
-      setResult(data);
-      setShowResult(true);
-    } catch {
-      Alert.alert("Error", "Failed to process image");
+
+      if (response.data.ok) {
+        if (response.data.medicines && response.data.medicines.length > 0) {
+          setDetectedMedicines(response.data.medicines);
+          setCurrentIndex(0);
+          populateFields(response.data.medicines[0]);
+          setShowResult(true);
+        } else {
+          Alert.alert("Notice", "No medicines detected in the image.");
+          handleOpenCamera();
+        }
+      } else {
+        Alert.alert("Error", response.data.error || "Failed to process image");
+        handleOpenCamera();
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to connect to backend");
+      handleOpenCamera();
     } finally {
       setLoading(false);
     }
   };
 
-  const handleConfirm = () => {
-    const confirmed = { medicine_name: medicineName, dosage, form, frequency };
-    console.log("Confirmed:", confirmed);
-    // TODO: save to your backend/state
-    setShowResult(false);
-    router.replace("/home");
+  const handleNext = async () => {
+    const tSlots = [];
+    if (frequencySlots.morning) tSlots.push({ time: timeSlots.morning, instructions: "" });
+    if (frequencySlots.afternoon) tSlots.push({ time: timeSlots.afternoon, instructions: "" });
+    if (frequencySlots.evening) tSlots.push({ time: timeSlots.evening, instructions: "" });
+
+    const freqStr = `${frequencySlots.morning ? "1" : "0"}-${frequencySlots.afternoon ? "1" : "0"}-${frequencySlots.evening ? "1" : "0"}`;
+
+    const payload = {
+      name: medicineName,
+      dosage,
+      frequency: freqStr,
+      time_slots: tSlots,
+      instructions,
+      duration_days: parseInt(durationDays) || 0,
+      icon: selectedIcon,
+      color: selectedColor.color,
+      bgColor: selectedColor.bg,
+    };
+
+    try {
+      setLoading(true);
+      const res = await api.post("/api/v1/medicines/manual", payload);
+      const medicineId = res.data.id;
+
+      // Schedule reminders
+      tSlots.forEach(slot => {
+        notificationService.scheduleMedicineReminder(medicineId, medicineName, slot.time);
+      });
+      
+      if (currentIndex < detectedMedicines.length - 1) {
+        const nextIdx = currentIndex + 1;
+        setCurrentIndex(nextIdx);
+        populateFields(detectedMedicines[nextIdx]);
+      } else {
+        setShowResult(false);
+        router.replace("/(tabs)/meds");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to save medicine");
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   const handleRescan = () => {
     setShowResult(false);
-    setResult(null);
+    setDetectedMedicines([]);
     handleOpenCamera();
+  };
+
+  const renderTimePicker = () => {
+    const { slot } = showTimePicker;
+    let options: string[] = [];
+    if (slot === "morning") options = ["06:00 AM", "07:00 AM", "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM"];
+    if (slot === "afternoon") options = ["12:00 PM", "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"];
+    if (slot === "evening") options = ["05:00 PM", "06:00 PM", "07:00 PM", "08:00 PM", "09:00 PM", "10:00 PM", "11:00 PM"];
+
+    return (
+      <Modal visible={showTimePicker.visible} transparent animationType="fade">
+        <View style={styles.timePickerOverlay}>
+          <View style={styles.timePickerContent}>
+            <Text style={styles.timePickerTitle}>Select {slot} time</Text>
+            {options.map((time) => (
+              <TouchableOpacity
+                key={time}
+                style={styles.timeOption}
+                onPress={() => {
+                  setTimeSlots({ ...timeSlots, [slot]: time });
+                  setShowTimePicker({ ...showTimePicker, visible: false });
+                }}
+              >
+                <Text style={styles.timeOptionText}>{time}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.timePickerClose}
+              onPress={() => setShowTimePicker({ ...showTimePicker, visible: false })}
+            >
+              <Text style={{ color: "red" }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
   };
 
   // ── CAMERA SCREEN ──
@@ -159,7 +284,7 @@ export default function ScanScreen() {
             style={styles.circleBtn}
             onPress={() => {
               setShowCamera(false);
-              router.replace("/home");
+              router.replace("/(tabs)");
             }}
           >
             <Feather name="x" size={20} color="white" />
@@ -194,72 +319,87 @@ export default function ScanScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.bottomItem}>
-            <Feather name="rotate-ccw" size={22} color="#9CA3AF" />
-            <Text style={styles.bottomText}>History</Text>
-          </TouchableOpacity>
+          <View style={styles.bottomItem}>
+            <Feather name="info" size={22} color="#9CA3AF" />
+            <Text style={styles.bottomText}>Help</Text>
+          </View>
         </View>
       </View>
     );
   }
 
-  // ── LOADING + RESULT ──
   return (
     <LinearGradient colors={["#020617", "#0B1B34"]} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1, justifyContent: "center" }}>
-        <Text style={{ color: "white", textAlign: "center" }}>
-          Opening Camera...
-        </Text>
+        {loading ? (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#22c55e" />
+            <Text style={{ color: "white", marginTop: 12 }}>Processing...</Text>
+          </View>
+        ) : (
+          <Text style={{ color: "white", textAlign: "center" }}>
+            Preparing scan...
+          </Text>
+        )}
       </SafeAreaView>
 
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#22c55e" />
-          <Text style={{ color: "white", marginTop: 12 }}>Processing...</Text>
-        </View>
-      )}
+      {renderTimePicker()}
 
-      {/* ── VERIFY DETAILS MODAL ── */}
       <Modal visible={showResult} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-          {/* Tap outside to dismiss */}
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            onPress={() => setShowResult(false)}
-            activeOpacity={1}
-          />
-
           <View style={styles.sheet}>
-            {/* Handle */}
             <View style={styles.handle} />
 
-            {/* Header */}
             <View style={styles.sheetHeader}>
               <View>
-                <Text style={styles.sheetTitle}>Verify Details</Text>
+                <Text style={styles.sheetTitle}>Confirm Medicine</Text>
                 <Text style={styles.sheetSubtitle}>
-                  Review extracted information
+                  Medicine {currentIndex + 1} of {detectedMedicines.length}
                 </Text>
               </View>
-              {confidence !== null && (
-                <View style={styles.badge}>
-                  <View style={styles.badgeDot} />
-                  <Text style={styles.badgeText}>
-                    {Math.round(confidence * 100)}% Match
-                  </Text>
-                </View>
-              )}
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Source row */}
-              <View style={styles.sourceRow}>
-                <View style={styles.sourceThumb} />
-                <View>
-                  <Text style={styles.label}>SOURCE</Text>
-                  <Text style={styles.sourceFile}>{sourceFile}</Text>
-                  <Text style={styles.viewOriginal}>View Original</Text>
-                </View>
+              {/* Icon selection */}
+              <Text style={styles.label}>ICON</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.iconRow}
+              >
+                {ICON_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.icon}
+                    style={[
+                      styles.iconOption,
+                      { backgroundColor: selectedColor.bg },
+                      selectedIcon === opt.icon && { borderColor: "#1E3A8A" },
+                    ]}
+                    onPress={() => setSelectedIcon(opt.icon)}
+                  >
+                    <MaterialCommunityIcons
+                      name={opt.icon as any}
+                      size={22}
+                      color={selectedIcon === opt.icon ? selectedColor.color : "#9CA3AF"}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Color selection */}
+              <Text style={styles.label}>COLOR</Text>
+              <View style={styles.colorSelectionRow}>
+                {COLOR_OPTIONS.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.color}
+                    style={[
+                      styles.colorDot,
+                      { backgroundColor: opt.color },
+                      selectedColor.color === opt.color && { borderColor: "#000", borderWidth: 2 },
+                    ]}
+                    onPress={() => setSelectedColor(opt)}
+                  />
+                ))}
               </View>
 
               {/* Medicine name */}
@@ -273,13 +413,10 @@ export default function ScanScreen() {
                     placeholder="Enter medicine name"
                     placeholderTextColor="#9CA3AF"
                   />
-                  <View style={styles.pillBadge}>
-                    <Feather name="edit-2" size={11} color="#185FA5" />
-                  </View>
                 </View>
               </View>
 
-              {/* Dosage + Form */}
+              {/* Dosage + Duration */}
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>DOSAGE</Text>
@@ -292,25 +429,79 @@ export default function ScanScreen() {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>FORM</Text>
+                  <Text style={styles.label}>DURATION (DAYS)</Text>
                   <TextInput
                     style={styles.input}
-                    value={form}
-                    onChangeText={setForm}
-                    placeholder="e.g. Tablet"
+                    value={durationDays}
+                    onChangeText={setDurationDays}
+                    keyboardType="numeric"
+                    placeholder="e.g. 7"
                     placeholderTextColor="#9CA3AF"
                   />
                 </View>
               </View>
 
-              {/* Frequency */}
+              {/* Frequency Checkboxes */}
+              <Text style={styles.label}>FREQUENCY</Text>
+              <View style={styles.checkboxContainer}>
+                {(["morning", "afternoon", "evening"] as const).map((slot) => (
+                  <TouchableOpacity
+                    key={slot}
+                    style={styles.checkboxItem}
+                    onPress={() => setFrequencySlots({ ...frequencySlots, [slot]: !frequencySlots[slot] })}
+                  >
+                    <Ionicons
+                      name={frequencySlots[slot] ? "checkbox" : "square-outline"}
+                      size={24}
+                      color={frequencySlots[slot] ? "#1E3A8A" : "#9CA3AF"}
+                    />
+                    <Text style={[styles.checkboxText, frequencySlots[slot] && styles.activeText]}>
+                      {slot.charAt(0).toUpperCase() + slot.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Time Selection */}
+              <Text style={styles.label}>SET TIMINGS</Text>
+              <View style={styles.timeGrid}>
+                {frequencySlots.morning && (
+                  <TouchableOpacity
+                    style={styles.timeSlotBtn}
+                    onPress={() => setShowTimePicker({ slot: "morning", visible: true })}
+                  >
+                    <Text style={styles.timeSlotLabel}>Morning</Text>
+                    <Text style={styles.timeSlotValue}>{timeSlots.morning}</Text>
+                  </TouchableOpacity>
+                )}
+                {frequencySlots.afternoon && (
+                  <TouchableOpacity
+                    style={styles.timeSlotBtn}
+                    onPress={() => setShowTimePicker({ slot: "afternoon", visible: true })}
+                  >
+                    <Text style={styles.timeSlotLabel}>Afternoon</Text>
+                    <Text style={styles.timeSlotValue}>{timeSlots.afternoon}</Text>
+                  </TouchableOpacity>
+                )}
+                {frequencySlots.evening && (
+                  <TouchableOpacity
+                    style={styles.timeSlotBtn}
+                    onPress={() => setShowTimePicker({ slot: "evening", visible: true })}
+                  >
+                    <Text style={styles.timeSlotLabel}>Evening</Text>
+                    <Text style={styles.timeSlotValue}>{timeSlots.evening}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Instructions */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>FREQUENCY</Text>
+                <Text style={styles.label}>INSTRUCTIONS</Text>
                 <TextInput
                   style={styles.input}
-                  value={frequency}
-                  onChangeText={setFrequency}
-                  placeholder="e.g. Twice daily"
+                  value={instructions}
+                  onChangeText={setInstructions}
+                  placeholder="e.g. After food"
                   placeholderTextColor="#9CA3AF"
                 />
               </View>
@@ -318,16 +509,18 @@ export default function ScanScreen() {
               {/* Confirm */}
               <TouchableOpacity
                 style={styles.confirmBtn}
-                onPress={handleConfirm}
+                onPress={handleNext}
               >
-                <Text style={styles.confirmText}>Confirm & Save →</Text>
+                <Text style={styles.confirmText}>
+                  {currentIndex < detectedMedicines.length - 1 ? "Next Medicine →" : "Save & Finish"}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={handleRescan}
                 style={{ paddingVertical: 12 }}
               >
-                <Text style={styles.rescanText}>Rescan Document</Text>
+                <Text style={styles.rescanText}>Cancel & Rescan</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -359,8 +552,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   frame: {
-    width: 320,
-    height: 360,
+    width: 300,
+    height: 400,
     borderRadius: 24,
     borderWidth: 1.5,
     borderColor: "#64748B",
@@ -443,6 +636,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 10,
   },
 
   // ── bottom sheet ──
@@ -476,46 +670,6 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: 18, fontWeight: "600", color: "#111827" },
   sheetSubtitle: { fontSize: 13, color: "#6B7280", marginTop: 2 },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#DCFCE7",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  badgeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#16A34A",
-  },
-  badgeText: { fontSize: 12, color: "#15803D", fontWeight: "500" },
-
-  // source
-  sourceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 16,
-  },
-  sourceThumb: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: "#E5E7EB",
-  },
-  sourceFile: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#111827",
-    marginTop: 2,
-  },
-  viewOriginal: { fontSize: 12, color: "#1D4ED8", marginTop: 2 },
 
   // fields
   fieldGroup: { marginBottom: 14 },
@@ -523,7 +677,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.8,
     color: "#9CA3AF",
-    marginBottom: 6,
+    marginBottom: 8,
     textTransform: "uppercase",
   },
   inputRow: {
@@ -536,14 +690,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   inputFlex: { flex: 1, fontSize: 15, fontWeight: "500", color: "#111827" },
-  pillBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
   row: { flexDirection: "row", gap: 12, marginBottom: 14 },
   input: {
     borderWidth: 1,
@@ -556,6 +702,62 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
 
+  // Checkboxes
+  checkboxContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    backgroundColor: "#F9FAFB",
+    padding: 12,
+    borderRadius: 12,
+  },
+  checkboxItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  checkboxText: { fontSize: 14, color: "#6B7280" },
+  activeText: { color: "#1E3A8A", fontWeight: "600" },
+
+  // Time slots
+  timeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 16,
+  },
+  timeSlotBtn: {
+    flex: 1,
+    minWidth: "30%",
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 10,
+    padding: 10,
+    alignItems: "center",
+  },
+  timeSlotLabel: { fontSize: 10, color: "#1E40AF", marginBottom: 2 },
+  timeSlotValue: { fontSize: 13, fontWeight: "600", color: "#1E3A8A" },
+
+  // Time Picker Modal
+  timePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  timePickerContent: {
+    backgroundColor: "white",
+    width: "80%",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+  },
+  timePickerTitle: { fontSize: 16, fontWeight: "700", marginBottom: 15 },
+  timeOption: { paddingVertical: 12, width: "100%", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  timeOptionText: { fontSize: 16, color: "#111827" },
+  timePickerClose: { marginTop: 15, padding: 10 },
+
   // buttons
   confirmBtn: {
     backgroundColor: "#1E3A8A",
@@ -566,5 +768,25 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   confirmText: { color: "white", fontSize: 15, fontWeight: "600" },
-  rescanText: { textAlign: "center", fontSize: 13, color: "#1D4ED8" },
+  rescanText: { textAlign: "center", fontSize: 13, color: "#DC2626" },
+
+  // Icon & Color Selection
+  iconRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
+  iconOption: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  colorSelectionRow: { flexDirection: "row", gap: 12, marginBottom: 16, flexWrap: "wrap" },
+  colorDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
 });
+
+

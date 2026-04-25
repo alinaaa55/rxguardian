@@ -60,6 +60,30 @@ export const storage = {
     return data ? JSON.parse(data) : [];
   },
 
+  async saveChatImage(messageId: string, imageUri: string) {
+    await AsyncStorage.setItem(`chat_img_${messageId}`, imageUri);
+  },
+
+  async getChatImage(messageId: string) {
+    return await AsyncStorage.getItem(`chat_img_${messageId}`);
+  },
+
+  async clearChatImages() {
+    const keys = await AsyncStorage.getAllKeys();
+    const imgKeys = keys.filter(key => key.startsWith('chat_img_'));
+    if (imgKeys.length > 0) {
+      await AsyncStorage.multiRemove(imgKeys);
+    }
+  },
+
+  async setItem(key: string, value: string) {
+    await AsyncStorage.setItem(key, value);
+  },
+
+  async getItem(key: string) {
+    return await AsyncStorage.getItem(key);
+  },
+
   async clearAll() {
     await this.removeToken();
     await AsyncStorage.clear();

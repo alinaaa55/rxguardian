@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as storage from './storage';
 
-const API_URL = 'https://drank-civic-worried.ngrok-free.dev';
+const API_URL = 'https://coletta-snouted-rigoberto.ngrok-free.dev';
 
 const api = axios.create({
   baseURL: API_URL,

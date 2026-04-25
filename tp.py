@@ -1,22 +1,13 @@
 text = """
-GET
-/api/v1/chat/history
-Get chat history for the current user
-input == async def get_history(
-    limit: int = Query(default=50, ge=1, le=200, description="Max messages to return"),
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_session),
-)
+  ERROR  SyntaxError: C:\Ayaan\Projects\Sem 6 Mpr\rxguardian\app\(tabs)\meds.tsx: Identifier 'styles' has already been declared. (399:6)
 
-response == [
-  {
-    "id": 0,
-    "user_id": "string",
-    "message": "string",
-    "sender": "user",
-    "timestamp": "2026-04-23T10:39:08.663Z"
-  }
-]
+  397 |
+  398 |
+> 399 | const styles = StyleSheet.create({
+      |       ^
+  400 |   safe: { flex: 1, backgroundColor: theme.colors.background },
+  401 |
+  402 |   header: {
 """
 
 # Remove newline characters

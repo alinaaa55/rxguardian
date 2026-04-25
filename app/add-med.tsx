@@ -1,5 +1,4 @@
-// app/add-med.tsx
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useState, useEffect } from "react";
 import {
@@ -13,11 +12,13 @@ import {
     View,
     KeyboardAvoidingView,
     Platform,
-    TouchableWithoutFeedback,
+    ActivityIndicator,
+    Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MedStore } from "./(tabs)/meds";
 import { theme, palette } from "../constants/theme";
+import api from "../services/api";
+import { notificationService } from "../services/notificationService";
 
 const ICON_OPTIONS = [
   { icon: "pill", label: "Pill" },
@@ -44,95 +45,174 @@ export default function AddMedScreen() {
   const params = useLocalSearchParams();
   const editId = params.id as string;
 
-  const [name, setName] = useState("");
-  const [dose, setDose] = useState("");
-  const [type, setType] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [medicineName, setMedicineName] = useState("");
   const [dosage, setDosage] = useState("");
-  const [frequency, setFrequency] = useState("");
-  const [duration, setDuration] = useState("");
-  const [time, setTime] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [durationDays, setDurationDays] = useState("7");
+  const [frequencySlots, setFrequencySlots] = useState({
+    morning: false,
+    afternoon: false,
+    evening: false,
+  });
+  const [timeSlots, setTimeSlots] = useState({
+    morning: "08:00 AM",
+    afternoon: "02:00 PM",
+    evening: "08:00 PM",
+  });
   const [selectedIcon, setSelectedIcon] = useState("pill");
   const [selectedColor, setSelectedColor] = useState(COLOR_OPTIONS[0]);
-  
-  const [showError, setShowError] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+
+  const [showTimePicker, setShowTimePicker] = useState<{
+    slot: "morning" | "afternoon" | "evening";
+    visible: boolean;
+  }>({ slot: "morning", visible: false });
 
   useEffect(() => {
     if (editId) {
-      const loadMed = async () => {
-        const meds = await MedStore.getAll();
-        const med = meds.find((m: any) => m.id === editId);
-        if (med) {
-          setName(med.name);
-          setDose(med.dose);
-          setType(med.type);
-          setDosage(med.dosage);
-          setFrequency(med.frequency);
-          setDuration(med.duration);
-          setTime(med.time);
-          setSelectedIcon(med.icon);
-          const colorOpt = COLOR_OPTIONS.find(c => c.color === med.color) || COLOR_OPTIONS[0];
-          setSelectedColor(colorOpt);
-        }
-      };
       loadMed();
     }
   }, [editId]);
 
-  async function handleSave() {
-    if (!name.trim() || !dose.trim() || !frequency.trim()) {
-      setErrorMsg("Please fill in the required fields:\nMedicine Name, Dose and Frequency.");
-      setShowError(true);
+  const loadMed = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`/api/v1/medicines/${editId}`);
+      const med = res.data;
+      setMedicineName(med.name);
+      setDosage(med.dosage);
+      setInstructions(med.instructions);
+      setDurationDays(med.duration_days.toString());
+      
+      const parts = (med.frequency || "0-0-0").split("-");
+      setFrequencySlots({
+        morning: parts[0] === "1",
+        afternoon: parts[1] === "1",
+        evening: parts[2] === "1",
+      });
+
+      // Map time slots back
+      const newTimeSlots = { ...timeSlots };
+      med.time_slots.forEach((ts: any) => {
+        const h = parseInt(ts.time.split(":")[0]);
+        const isPM = ts.time.includes("PM");
+        if ((h >= 6 && h < 12 && !isPM) || (h === 12 && isPM)) newTimeSlots.morning = ts.time;
+        else if ((h >= 12 && h < 5 && isPM) || (h === 12 && !isPM)) newTimeSlots.afternoon = ts.time;
+        else newTimeSlots.evening = ts.time;
+      });
+      setTimeSlots(newTimeSlots);
+      
+      setSelectedIcon(med.icon || "pill");
+      const colorOpt = COLOR_OPTIONS.find(c => c.color === med.color) || COLOR_OPTIONS[0];
+      setSelectedColor(colorOpt);
+    } catch (error) {
+      Alert.alert("Error", "Failed to load medicine details");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!medicineName.trim() || !dosage.trim()) {
+      Alert.alert("Missing Info", "Please enter medicine name and dosage");
       return;
     }
 
-    const medData = {
-      name: name.trim(),
-      dose: dose.trim(),
-      type: type.trim() || "Tablet",
-      dosage: dosage.trim() || "1 Tablet",
-      frequency: frequency.trim(),
-      duration: duration.trim() || "Ongoing",
-      time: time.trim() || "As prescribed",
+    const tSlots = [];
+    if (frequencySlots.morning) tSlots.push({ time: timeSlots.morning, instructions: "" });
+    if (frequencySlots.afternoon) tSlots.push({ time: timeSlots.afternoon, instructions: "" });
+    if (frequencySlots.evening) tSlots.push({ time: timeSlots.evening, instructions: "" });
+
+    const freqStr = `${frequencySlots.morning ? "1" : "0"}-${frequencySlots.afternoon ? "1" : "0"}-${frequencySlots.evening ? "1" : "0"}`;
+
+    const payload = {
+      name: medicineName,
+      dosage,
+      frequency: freqStr,
+      time_slots: tSlots,
+      instructions,
+      duration_days: parseInt(durationDays) || 0,
       icon: selectedIcon,
       color: selectedColor.color,
       bgColor: selectedColor.bg,
     };
 
-    if (editId) {
-      await MedStore.update(editId, medData);
-      // We need to go back twice or replace the route to refresh details
-      // But actually, just going back is enough if details page refreshes on focus
+    try {
+      setLoading(true);
+      let medicineId = editId;
+      if (editId) {
+        await api.put(`/api/v1/medicines/${editId}`, payload);
+      } else {
+        const res = await api.post("/api/v1/medicines/manual", payload);
+        medicineId = res.data.id;
+      }
+
+      // Schedule reminders
+      tSlots.forEach(slot => {
+        notificationService.scheduleMedicineReminder(medicineId, medicineName, slot.time);
+      });
+
       router.back();
-    } else {
-      const newMed = {
-        ...medData,
-        id: Date.now().toString(),
-        status: "active",
-        taken: false,
-        refillDue: false,
-      };
-      await MedStore.add(newMed);
-      router.back();
+    } catch (error) {
+      Alert.alert("Error", "Failed to save medicine");
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+
+  const renderTimePicker = () => {
+    const { slot } = showTimePicker;
+    let options: string[] = [];
+    if (slot === "morning") options = ["06:00 AM", "07:00 AM", "08:00 AM", "09:00 AM", "10:00 AM", "11:00 AM"];
+    if (slot === "afternoon") options = ["12:00 PM", "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"];
+    if (slot === "evening") options = ["05:00 PM", "06:00 PM", "07:00 PM", "08:00 PM", "09:00 PM", "10:00 PM", "11:00 PM"];
+
+    return (
+      <Modal visible={showTimePicker.visible} transparent animationType="fade">
+        <View style={styles.timePickerOverlay}>
+          <View style={styles.timePickerContent}>
+            <Text style={styles.timePickerTitle}>Select {slot} time</Text>
+            {options.map((time) => (
+              <TouchableOpacity
+                key={time}
+                style={styles.timeOption}
+                onPress={() => {
+                  setTimeSlots({ ...timeSlots, [slot]: time });
+                  setShowTimePicker({ ...showTimePicker, visible: false });
+                }}
+              >
+                <Text style={styles.timeOptionText}>{time}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.timePickerClose}
+              onPress={() => setShowTimePicker({ ...showTimePicker, visible: false })}
+            >
+              <Text style={{ color: "red" }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
-
+      {renderTimePicker()}
+      
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
             <Feather name="x" size={20} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{editId ? "Edit Medication" : "Add Medication"}</Text>
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>{editId ? "Update" : "Save"}</Text>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
+            {loading ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.saveBtnText}>{editId ? "Update" : "Save"}</Text>}
           </TouchableOpacity>
         </View>
 
@@ -141,38 +221,32 @@ export default function AddMedScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Icon picker - Horizontal Scroll */}
-          <Text style={styles.sectionLabel}>Icon</Text>
-          <View>
-            <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.iconRow}
-            >
+          <Text style={styles.sectionLabel}>ICON</Text>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={styles.iconRow}
+          >
             {ICON_OPTIONS.map((opt) => (
-                <TouchableOpacity
+              <TouchableOpacity
                 key={opt.icon}
                 style={[
-                    styles.iconOption,
-                    { backgroundColor: selectedColor.bg },
-                    selectedIcon === opt.icon && { borderColor: theme.colors.primary },
+                  styles.iconOption,
+                  { backgroundColor: selectedColor.bg },
+                  selectedIcon === opt.icon && { borderColor: theme.colors.primary, borderWidth: 2 },
                 ]}
                 onPress={() => setSelectedIcon(opt.icon)}
-                >
+              >
                 <MaterialCommunityIcons
-                    name={opt.icon as any}
-                    size={22}
-                    color={
-                    selectedIcon === opt.icon ? selectedColor.color : theme.colors.tabInactive
-                    }
+                  name={opt.icon as any}
+                  size={24}
+                  color={selectedIcon === opt.icon ? selectedColor.color : theme.colors.tabInactive}
                 />
-                </TouchableOpacity>
+              </TouchableOpacity>
             ))}
-            </ScrollView>
-          </View>
+          </ScrollView>
 
-          {/* Color picker */}
-          <Text style={styles.sectionLabel}>Color</Text>
+          <Text style={styles.sectionLabel}>COLOR</Text>
           <View style={styles.colorRow}>
             {COLOR_OPTIONS.map((opt) => (
               <TouchableOpacity
@@ -180,136 +254,116 @@ export default function AddMedScreen() {
                 style={[
                   styles.colorDot,
                   { backgroundColor: opt.color },
-                  selectedColor.color === opt.color && { borderColor: theme.colors.primary, borderWidth: 3 },
+                  selectedColor.color === opt.color && { borderColor: theme.colors.primary, borderWidth: 2.5 },
                 ]}
                 onPress={() => setSelectedColor(opt)}
               />
             ))}
           </View>
 
-          {/* Fields */}
-          <Text style={styles.sectionLabel}>Details</Text>
-          <View style={styles.card}>
-            <Field
-              label="Medicine Name *"
+          <Text style={styles.sectionLabel}>DETAILS</Text>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldSub}>Medicine Name</Text>
+            <TextInput
+              style={styles.input}
+              value={medicineName}
+              onChangeText={setMedicineName}
               placeholder="e.g. Metformin"
-              value={name}
-              onChangeText={setName}
-            />
-            <Divider />
-            <Field
-              label="Dose *"
-              placeholder="e.g. 500mg"
-              value={dose}
-              onChangeText={setDose}
-            />
-            <Divider />
-            <Field
-              label="Type"
-              placeholder="e.g. Tablet, Capsule, Syrup"
-              value={type}
-              onChangeText={setType}
-            />
-            <Divider />
-            <Field
-              label="Dosage"
-              placeholder="e.g. 1 Tablet"
-              value={dosage}
-              onChangeText={setDosage}
-            />
-            <Divider />
-            <Field
-              label="Frequency *"
-              placeholder="e.g. 2x Daily, 1x Daily"
-              value={frequency}
-              onChangeText={setFrequency}
-            />
-            <Divider />
-            <Field
-              label="Duration"
-              placeholder="e.g. 90 Days Left"
-              value={duration}
-              onChangeText={setDuration}
-            />
-            <Divider />
-            <Field
-              label="Time & Instructions"
-              placeholder="e.g. 8:00 AM • After meal"
-              value={time}
-              onChangeText={setTime}
             />
           </View>
 
-          <Text style={styles.requiredNote}>* Required fields</Text>
-          {/* Spacer for bottom fields when keyboard is open */}
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldSub}>Dosage</Text>
+              <TextInput
+                style={styles.input}
+                value={dosage}
+                onChangeText={setDosage}
+                placeholder="e.g. 500mg"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldSub}>Duration (Days)</Text>
+              <TextInput
+                style={styles.input}
+                value={durationDays}
+                onChangeText={setDurationDays}
+                keyboardType="numeric"
+                placeholder="e.g. 7"
+              />
+            </View>
+          </View>
+
+          <Text style={styles.sectionLabel}>FREQUENCY</Text>
+          <View style={styles.checkboxContainer}>
+            {(["morning", "afternoon", "evening"] as const).map((slot) => (
+              <TouchableOpacity
+                key={slot}
+                style={styles.checkboxItem}
+                onPress={() => setFrequencySlots({ ...frequencySlots, [slot]: !frequencySlots[slot] })}
+              >
+                <Ionicons
+                  name={frequencySlots[slot] ? "checkbox" : "square-outline"}
+                  size={24}
+                  color={frequencySlots[slot] ? theme.colors.primary : theme.colors.tabInactive}
+                />
+                <Text style={[styles.checkboxText, frequencySlots[slot] && styles.activeText]}>
+                  {slot.charAt(0).toUpperCase() + slot.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.sectionLabel}>SET TIMINGS</Text>
+          <View style={styles.timeGrid}>
+            {frequencySlots.morning && (
+              <TouchableOpacity
+                style={styles.timeSlotBtn}
+                onPress={() => setShowTimePicker({ slot: "morning", visible: true })}
+              >
+                <Text style={styles.timeSlotLabel}>Morning</Text>
+                <Text style={styles.timeSlotValue}>{timeSlots.morning}</Text>
+              </TouchableOpacity>
+            )}
+            {frequencySlots.afternoon && (
+              <TouchableOpacity
+                style={styles.timeSlotBtn}
+                onPress={() => setShowTimePicker({ slot: "afternoon", visible: true })}
+              >
+                <Text style={styles.timeSlotLabel}>Afternoon</Text>
+                <Text style={styles.timeSlotValue}>{timeSlots.afternoon}</Text>
+              </TouchableOpacity>
+            )}
+            {frequencySlots.evening && (
+              <TouchableOpacity
+                style={styles.timeSlotBtn}
+                onPress={() => setShowTimePicker({ slot: "evening", visible: true })}
+              >
+                <Text style={styles.timeSlotLabel}>Evening</Text>
+                <Text style={styles.timeSlotValue}>{timeSlots.evening}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldSub}>Instructions</Text>
+            <TextInput
+              style={styles.input}
+              value={instructions}
+              onChangeText={setInstructions}
+              placeholder="e.g. After food"
+            />
+          </View>
+
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* Themed Error Modal */}
-      <Modal
-        visible={showError}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowError(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setShowError(false)}>
-          <View style={styles.errorOverlay}>
-            <TouchableWithoutFeedback>
-                <View style={styles.errorCard}>
-                    <View style={styles.errorIconBg}>
-                        <Feather name="alert-circle" size={32} color={theme.colors.danger} />
-                    </View>
-                    <Text style={styles.errorTitle}>Missing Information</Text>
-                    <Text style={styles.errorText}>{errorMsg}</Text>
-                    <TouchableOpacity 
-                        style={styles.errorButton} 
-                        onPress={() => setShowError(false)}
-                    >
-                        <Text style={styles.errorButtonText}>Got it</Text>
-                    </TouchableOpacity>
-                </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
     </SafeAreaView>
   );
 }
 
-function Field({
-  label,
-  placeholder,
-  value,
-  onChangeText,
-}: {
-  label: string;
-  placeholder: string;
-  value: string;
-  onChangeText: (t: string) => void;
-}) {
-  return (
-    <View style={styles.fieldRow}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={styles.fieldInput}
-        placeholder={placeholder}
-        placeholderTextColor={theme.colors.tabInactive}
-        value={value}
-        onChangeText={onChangeText}
-        autoCapitalize="sentences"
-      />
-    </View>
-  );
-}
-
-function Divider() {
-  return <View style={styles.divider} />;
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
-
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -331,124 +385,87 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
+    minWidth: 80,
+    alignItems: "center",
   },
   saveBtnText: { color: theme.colors.surface, fontWeight: "700", fontSize: 14 },
-
   scroll: { paddingHorizontal: 20, paddingBottom: 60 },
-
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
     color: theme.colors.text.secondary,
-    textTransform: "uppercase",
     letterSpacing: 0.8,
     marginTop: 24,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-
-  iconRow: { flexDirection: "row", gap: 12, paddingRight: 20 },
+  iconRow: { flexDirection: "row", gap: 12 },
   iconOption: {
     width: 54,
     height: 54,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "transparent",
   },
-
-  colorRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+  colorRow: { flexDirection: "row", gap: 12, alignItems: "center", flexWrap: "wrap" },
   colorDot: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
-
-  card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 20,
-    paddingVertical: 4,
-    ...theme.shadows.sm,
-  },
-
-  fieldRow: {
+  fieldGroup: { marginBottom: 16 },
+  fieldSub: { fontSize: 11, color: theme.colors.tabInactive, marginBottom: 6 },
+  input: {
+    backgroundColor: "white",
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
-  fieldLabel: {
-    fontSize: 11,
-    color: theme.colors.tabInactive,
-    marginBottom: 4,
+  row: { flexDirection: "row", gap: 12, marginBottom: 16 },
+  checkboxContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "white",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
-  fieldInput: {
-    fontSize: 14,
-    color: theme.colors.text.primary,
-    fontWeight: "500",
-    padding: 0,
+  checkboxItem: { flexDirection: "row", alignItems: "center", gap: 8 },
+  checkboxText: { fontSize: 14, color: theme.colors.text.secondary },
+  activeText: { color: theme.colors.primary, fontWeight: "600" },
+  timeGrid: { flexDirection: "row", gap: 10, flexWrap: "wrap", marginTop: 4 },
+  timeSlotBtn: {
+    flex: 1,
+    minWidth: "30%",
+    backgroundColor: theme.colors.primaryLight,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: theme.colors.primaryAccent + "40",
   },
-
-  divider: {
-    height: 0.5,
-    backgroundColor: theme.colors.border,
-    marginHorizontal: 16,
-  },
-
-  requiredNote: {
-    fontSize: 11,
-    color: theme.colors.tabInactive,
-    marginTop: 12,
-    textAlign: "center",
-  },
-
-  // Error Modal Styles
-  errorOverlay: {
+  timeSlotLabel: { fontSize: 10, color: theme.colors.primaryAccent, marginBottom: 2 },
+  timeSlotValue: { fontSize: 14, fontWeight: "700", color: theme.colors.primary },
+  timePickerOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
   },
-  errorCard: {
-    width: "100%",
-    backgroundColor: theme.colors.surface,
+  timePickerContent: {
+    backgroundColor: "white",
+    width: "80%",
     borderRadius: 24,
     padding: 24,
     alignItems: "center",
-    ...theme.shadows.md,
   },
-  errorIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.colors.dangerLight,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: theme.colors.primary,
-    marginBottom: 8,
-  },
-  errorText: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  errorButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 16,
-    width: "100%",
-    alignItems: "center",
-  },
-  errorButtonText: {
-    color: theme.colors.surface,
-    fontWeight: "700",
-    fontSize: 15,
-  },
+  timePickerTitle: { fontSize: 18, fontWeight: "800", marginBottom: 20 },
+  timeOption: { paddingVertical: 14, width: "100%", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  timeOptionText: { fontSize: 16, color: theme.colors.text.primary, fontWeight: "500" },
+  timePickerClose: { marginTop: 20, padding: 10 },
 });

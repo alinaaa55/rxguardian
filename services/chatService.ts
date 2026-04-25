@@ -1,11 +1,14 @@
 import api from './api';
+import { storage } from './storage';
 
 export interface ChatMessage {
   id: number;
   user_id: string;
   message: string;
-  sender: 'user' | 'assistant' | 'bot'; // 'assistant' and 'bot' seem to be used interchangeably in common chat apps, but backend uses 'user'/'bot'
+  sender: 'user' | 'assistant' | 'bot'; 
   timestamp: string;
+  pharmeasy_results?: PharmEasyResult[];
+  localImageUri?: string;
 }
 
 export interface PharmEasyResult {
@@ -49,13 +52,37 @@ export const chatService = {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data;
+
+    const data: ChatResponse = response.data;
+    if (data.user_message && data.user_message.id) {
+      await storage.saveChatImage(data.user_message.id.toString(), imageUri);
+    }
+    
+    return data;
   },
 
   async getHistory(limit: number = 50): Promise<ChatMessage[]> {
     const response = await api.get('/api/v1/chat/history', {
       params: { limit },
     });
-    return response.data;
+    
+    const messages: ChatMessage[] = response.data;
+    
+    // Check for images in history
+    for (const msg of messages) {
+      if (msg.message && msg.message.includes('[image]')) {
+        const localUri = await storage.getChatImage(msg.id.toString());
+        if (localUri) {
+          msg.localImageUri = localUri;
+        }
+      }
+    }
+    
+    return messages;
+  },
+
+  async clearHistory(): Promise<void> {
+    await api.delete('/api/v1/chat/history');
+    await storage.clearChatImages();
   }
 };

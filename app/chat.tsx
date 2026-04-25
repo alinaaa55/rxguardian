@@ -2,29 +2,29 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Animated,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    ActivityIndicator,
-    Linking,
-    Modal,
-    Pressable,
-    Dimensions,
-    ScrollView,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { theme } from "../constants/theme";
-import { chatService, ChatMessage, PharmEasyResult } from "../services/chatService";
+import { chatService, PharmEasyResult } from "../services/chatService";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -138,7 +138,15 @@ const TypingIndicator = () => {
 };
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
-const MessageBubble = ({ message, onMedicinePress }: { message: UIMessage, onMedicinePress: (res: PharmEasyResult) => void }) => {
+const MessageBubble = ({ 
+  message, 
+  onMedicinePress,
+  onImagePress 
+}: { 
+  message: UIMessage, 
+  onMedicinePress: (res: PharmEasyResult) => void,
+  onImagePress: (uri: string) => void
+}) => {
   const isUser = message.role === "user";
 
   const formatText = (text: string) =>
@@ -176,61 +184,63 @@ const MessageBubble = ({ message, onMedicinePress }: { message: UIMessage, onMed
 
       <View style={{ maxWidth: "78%" }}>
         <View style={{ gap: 4 }}>
-            {message.imageUri && (
-                <View
-                    style={[
-                    styles.bubble,
-                    isUser ? styles.userBubble : styles.aiBubble,
-                    { padding: 6 },
-                    ]}
-                >
-                    <Image
-                    source={{ uri: message.imageUri }}
-                    style={styles.uploadedImage}
-                    resizeMode="cover"
-                    />
-                </View>
-            )}
+          {message.imageUri && (
+            <TouchableOpacity 
+              activeOpacity={0.9}
+              onPress={() => onImagePress(message.imageUri!)}
+              style={[
+                styles.bubble,
+                isUser ? styles.userBubble : styles.aiBubble,
+                { padding: 6 },
+              ]}
+            >
+              <Image
+                source={{ uri: message.imageUri }}
+                style={styles.uploadedImage}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          )}
 
-            {message.text ? (
-                <View
-                    style={[
-                    styles.bubble,
-                    isUser ? styles.userBubble : styles.aiBubble,
-                    ]}
-                >
-                    <Text
-                    style={[
-                        styles.bubbleText,
-                        isUser ? styles.userText : styles.aiText,
-                    ]}
-                    >
-                    {formatText(message.text)}
-                    </Text>
-                </View>
-            ) : null}
+          {message.text ? (
+            <View
+              style={[
+                styles.bubble,
+                isUser ? styles.userBubble : styles.aiBubble,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.bubbleText,
+                  isUser ? styles.userText : styles.aiText,
+                ]}
+              >
+                {formatText(message.text)}
+              </Text>
+            </View>
+          ) : null}
 
-            {message.suggestion && message.suggestion.length > 0 && (
-              <View style={styles.chipsContainer}>
-                {message.suggestion.map((res, i) => (
-                  <MedicineChip 
-                    key={i} 
-                    result={res} 
-                    onPress={() => onMedicinePress(res)} 
-                  />
-                ))}
-              </View>
-            )}
+          {message.suggestion && message.suggestion.length > 0 && (
+            <View style={styles.chipsContainer}>
+              {message.suggestion.map((res, i) => (
+                <MedicineChip
+                  key={i}
+                  result={res}
+                  onPress={() => onMedicinePress(res)}
+                />
+              ))}
+            </View>
+          )}
         </View>
 
-        <Text 
-            style={[
-                styles.timestamp, 
-                isUser ? { textAlign: 'right', alignSelf: 'flex-end', marginRight: 4 } : { textAlign: 'left', alignSelf: 'flex-start', marginLeft: 4 },
-                { marginTop: 4 }
-            ]}
+        <Text
+          style={[
+            styles.timestamp,
+            isUser ? { textAlign: 'right', alignSelf: 'flex-end', marginRight: 4 } : { textAlign: 'left', alignSelf: 'flex-start', marginLeft: 4 },
+            { marginTop: 4 }
+          ]}
         >
-            {timeStr}
+          {timeStr}
         </Text>
       </View>
 
@@ -253,10 +263,13 @@ export default function ChatScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  
+
   // Bottom Sheet State
   const [selectedMedicine, setSelectedMedicine] = useState<PharmEasyResult | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
+  
+  // Image Preview State
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const scrollToBottom = () => {
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
@@ -269,13 +282,25 @@ export default function ChatScreen() {
   const loadHistory = async () => {
     try {
       const history = await chatService.getHistory();
-      const uiHistory: UIMessage[] = history.map((msg) => ({
-        id: msg.id.toString(),
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        text: msg.message,
-        timestamp: new Date(msg.timestamp),
-      }));
-      
+      const uiHistory: UIMessage[] = history.map((msg) => {
+        let text = msg.message || "";
+        const imageUri = msg.localImageUri;
+
+        // Strip [image] prefix for UI
+        if (text.includes('[image]')) {
+          text = text.replace('[image]', '').trim();
+        }
+
+        return {
+          id: msg.id.toString(),
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          text: text,
+          imageUri: imageUri,
+          suggestion: msg.pharmeasy_results,
+          timestamp: new Date(msg.timestamp),
+        };
+      });
+
       if (uiHistory.length === 0) {
         setMessages([
           {
@@ -295,12 +320,29 @@ export default function ChatScreen() {
     }
   };
 
+  const handleNewChat = async () => {
+    try {
+      await chatService.clearHistory();
+      setMessages([
+        {
+          id: "0",
+          role: "assistant",
+          text: "Hi! I'm RxGuardian AI. 👋\n\nI can analyze your prescriptions, check drug interactions, and help manage your medications. How can I help you today?",
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to clear history:", error);
+    }
+  };
+
   const sendMessage = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed && !pendingImage) return;
 
+    const tempId = Date.now().toString();
     const userMsg: UIMessage = {
-      id: Date.now().toString(),
+      id: tempId,
       role: "user",
       text: trimmed,
       imageUri: pendingImage ?? undefined,
@@ -310,7 +352,7 @@ export default function ChatScreen() {
     setMessages((prev) => [...prev, userMsg]);
     const currentInput = trimmed;
     const currentImage = pendingImage;
-    
+
     setInput("");
     setPendingImage(null);
     setIsTyping(true);
@@ -323,6 +365,22 @@ export default function ChatScreen() {
       } else {
         response = await chatService.sendMessage(currentInput);
       }
+
+      // Update the user message with the real ID from server
+      setMessages(prev => prev.map(m => {
+        if (m.id === tempId) {
+          let text = response.user_message.message;
+          if (text.startsWith('[image]')) {
+            text = text.replace('[image]', '').trim();
+          }
+          return {
+            ...m,
+            id: response.user_message.id.toString(),
+            text: text
+          };
+        }
+        return m;
+      }));
 
       const newMessages: UIMessage[] = [];
       if (response.pre_tool_message) {
@@ -408,7 +466,13 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={handleNewChat} style={styles.newChatBtn}>
+          <MaterialCommunityIcons
+            name="chat-plus-outline"
+            size={22}
+            color={theme.colors.primary}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* ── Messages + Input ── */}
@@ -431,20 +495,21 @@ export default function ChatScreen() {
             showsVerticalScrollIndicator={false}
             ListFooterComponent={isTyping ? <TypingIndicator /> : null}
             renderItem={({ item }) => (
-              <MessageBubble 
-                message={item} 
-                onMedicinePress={handleMedicinePress} 
+              <MessageBubble
+                message={item}
+                onMedicinePress={handleMedicinePress}
+                onImagePress={(uri) => setPreviewImage(uri)}
               />
             )}
             onContentSizeChange={scrollToBottom}
-          />
-        )}
+            />
+            )}
 
-        {/* Pending image preview */}
-        {pendingImage && (
-          <View style={styles.pendingImageRow}>
+            {/* Pending image preview */}
+            {pendingImage && (
+            <View style={styles.pendingImageRow}>
             <Image source={{ uri: pendingImage }} style={styles.pendingThumb} />
-            <Text style={styles.pendingLabel}>Prescription ready to send</Text>
+            <Text style={styles.pendingLabel}>Image ready to send</Text>
             <TouchableOpacity onPress={() => setPendingImage(null)}>
               <Ionicons
                 name="close-circle"
@@ -452,12 +517,12 @@ export default function ChatScreen() {
                 color={theme.colors.text.secondary}
               />
             </TouchableOpacity>
-          </View>
-        )}
+            </View>
+            )}
 
-        {/* ── Input Bar ── */}
-        <SafeAreaView edges={['bottom']}>
-          <View style={styles.inputBar}>
+            {/* ── Input Bar ── */}
+            <SafeAreaView edges={['bottom']}>
+            <View style={styles.inputBar}>
             <TouchableOpacity onPress={pickImage} style={styles.iconBtn}>
               <Ionicons
                 name="add-circle-outline"
@@ -490,23 +555,23 @@ export default function ChatScreen() {
             >
               <Ionicons name="send" size={17} color={theme.colors.surface} />
             </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+            </View>
+            </SafeAreaView>
+            </KeyboardAvoidingView>
 
-      {/* ── Bottom Sheet (Modal) ── */}
-      <Modal
-        visible={sheetVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSheetVisible(false)}
-      >
-        <Pressable 
-          style={styles.modalOverlay} 
-          onPress={() => setSheetVisible(false)} 
-        />
-        <View style={styles.bottomSheet}>
-          <View style={styles.sheetHeader}>
+            {/* ── Bottom Sheet (Modal) ── */}
+            <Modal
+            visible={sheetVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setSheetVisible(false)}
+            >
+            <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setSheetVisible(false)}
+            />
+            <View style={styles.bottomSheet}>
+            <View style={styles.sheetHeader}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetTitleRow}>
               <Text style={styles.sheetTitle}>PharmEasy Results</Text>
@@ -515,15 +580,15 @@ export default function ChatScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.sheetSubtitle}>Search results for: {selectedMedicine?.medicine}</Text>
-          </View>
+            </View>
 
-          <ScrollView 
-            contentContainerStyle={styles.sheetContent} 
+            <ScrollView
+            contentContainerStyle={styles.sheetContent}
             showsVerticalScrollIndicator={false}
-          >
+            >
             {selectedMedicine?.results.map((item, index) => (
-              <TouchableOpacity 
-                key={index} 
+              <TouchableOpacity
+                key={index}
                 style={styles.resultItem}
                 onPress={() => Linking.openURL(item.url)}
               >
@@ -534,335 +599,380 @@ export default function ChatScreen() {
                 </View>
               </TouchableOpacity>
             ))}
-          </ScrollView>
-        </View>
-      </Modal>
-    </SafeAreaView>
-  );
-}
+            </ScrollView>
+            </View>
+            </Modal>
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+            {/* ── Image Preview Modal ── */}
+            <Modal
+            visible={!!previewImage}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPreviewImage(null)}
+            >
+            <View style={styles.previewOverlay}>
+            <TouchableOpacity 
+            style={styles.previewClose}
+            onPress={() => setPreviewImage(null)}
+            >
+            <Ionicons name="close" size={30} color={theme.colors.surface} />
+            </TouchableOpacity>
 
-  // Header
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: theme.colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  backBtn: { padding: 6, borderRadius: 20 },
-  headerCenter: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginLeft: 4,
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: theme.colors.primary,
-    letterSpacing: 0.2,
-  },
-  onlineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginTop: 1,
-  },
-  onlineDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: theme.colors.successLight,
-  },
-  onlineText: { fontSize: 12, color: theme.colors.success, fontWeight: "500" },
+            {previewImage && (
+            <Image 
+              source={{ uri: previewImage }} 
+              style={styles.fullImage} 
+              resizeMode="contain"
+            />
+            )}
+            </View>
+            </Modal>
+            </SafeAreaView>
+            );
+            }
 
-  // Messages
-  messageList: { paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
-  bubbleWrapper: {
-    flexDirection: "row",
-    alignItems: "flex-start", 
-    gap: 8,
-    marginVertical: 4,
-  },
-  userWrapper: { alignSelf: "flex-end" },
-  aiWrapper: { alignSelf: "flex-start" },
-  avatarSmall: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 2,
-  },
-  userAvatarSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.primaryAccent,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-    marginTop: 2,
-  },
-  bubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  userBubble: {
-    backgroundColor: theme.colors.primary,
-    borderBottomRightRadius: 4,
-  },
-  aiBubble: {
-    backgroundColor: theme.colors.surface,
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
-  bubbleText: { fontSize: 14.5, lineHeight: 21 },
-  userText: { color: theme.colors.surface },
-  aiText: { color: theme.colors.text.primary },
-  timestamp: {
-    fontSize: 10,
-    color: theme.colors.text.secondary,
-  },
-  uploadedImage: { width: 180, height: 140, borderRadius: 12 },
+            // ─── Styles ───────────────────────────────────────────────────────────────────
+            const styles = StyleSheet.create({
+            safe: { flex: 1, backgroundColor: theme.colors.background },
 
-  // Chips Container
-  chipsContainer: {
-    flexDirection: 'column',
-    gap: 10,
-    marginTop: 8,
-    width: '100%',
-  },
-  medicineActionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    padding: 12,
-    borderRadius: 18,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    ...theme.shadows.sm,
-  },
-  cardImageContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.colors.text.primary,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: theme.colors.text.secondary,
-    marginTop: 2,
-  },
-  cardAction: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+            // Header
+            header: {
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: theme.colors.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+            elevation: 2,
+            shadowColor: "#000",
+            shadowOpacity: 0.06,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 2 },
+            },
+            backBtn: { padding: 6, borderRadius: 20 },
+            newChatBtn: { padding: 6, borderRadius: 20 },
+            headerCenter: {
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            marginLeft: 4,
+            },
+            headerAvatar: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: theme.colors.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            },
+            headerTitle: {
+            fontSize: 16,
+            fontWeight: "700",
+            color: theme.colors.primary,
+            letterSpacing: 0.2,
+            },
+            onlineRow: {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            marginTop: 1,
+            },
+            onlineDot: {
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            backgroundColor: theme.colors.successLight,
+            },
+            onlineText: { fontSize: 12, color: theme.colors.success, fontWeight: "500" },
 
-  // Bottom Sheet
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: SCREEN_HEIGHT * 0.65,
-    backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingTop: 12,
-    ...theme.shadows.lg,
-  },
-  sheetHeader: {
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#E2E8F0',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  sheetTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sheetTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.colors.primary,
-  },
-  sheetSubtitle: {
-    fontSize: 14,
-    color: theme.colors.text.secondary,
-    marginTop: 4,
-  },
-  sheetContent: {
-    padding: 20,
-    gap: 16,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: 18,
-    padding: 12,
-    gap: 16,
-    ...theme.shadows.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  resultImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: theme.colors.background,
-  },
-  resultInfo: {
-    flex: 1,
-  },
-  resultName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.colors.text.primary,
-    lineHeight: 20,
-  },
-  buyText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: theme.colors.primaryAccent,
-    marginTop: 6,
-  },
+            // Messages
+            messageList: { paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
+            bubbleWrapper: {
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 8,
+            marginVertical: 4,
+            },
+            userWrapper: { alignSelf: "flex-end" },
+            aiWrapper: { alignSelf: "flex-start" },
+            avatarSmall: {
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: theme.colors.primaryLight,
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: 2,
+            },
+            userAvatarSmall: {
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: theme.colors.primaryAccent,
+            alignItems: "center",
+            justifyContent: "center",
+            marginLeft: 8,
+            marginTop: 2,
+            },
+            bubble: {
+            borderRadius: 18,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            },
+            userBubble: {
+            backgroundColor: theme.colors.primary,
+            borderBottomRightRadius: 4,
+            },
+            aiBubble: {
+            backgroundColor: theme.colors.surface,
+            borderBottomLeftRadius: 4,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            shadowColor: "#000",
+            shadowOpacity: 0.04,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 1 },
+            elevation: 1,
+            },
+            bubbleText: { fontSize: 14.5, lineHeight: 21 },
+            userText: { color: theme.colors.surface },
+            aiText: { color: theme.colors.text.primary },
+            timestamp: {
+            fontSize: 10,
+            color: theme.colors.text.secondary,
+            },
+            uploadedImage: { width: 180, height: 140, borderRadius: 12 },
 
-  // Typing dots
-  typingDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: theme.colors.primaryAccent,
-  },
+            // Chips Container
+            chipsContainer: {
+            flexDirection: 'column',
+            gap: 10,
+            marginTop: 8,
+            width: '100%',
+            },
+            medicineActionCard: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: theme.colors.surface,
+            padding: 12,
+            borderRadius: 18,
+            gap: 12,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            ...theme.shadows.sm,
+            },
+            cardImageContainer: {
+            width: 50,
+            height: 50,
+            borderRadius: 10,
+            backgroundColor: theme.colors.background,
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            },
+            cardImage: {
+            width: '100%',
+            height: '100%',
+            },
+            cardContent: {
+            flex: 1,
+            },
+            cardTitle: {
+            fontSize: 14,
+            fontWeight: '700',
+            color: theme.colors.text.primary,
+            },
+            cardSubtitle: {
+            fontSize: 12,
+            color: theme.colors.text.secondary,
+            marginTop: 2,
+            },
+            cardAction: {
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: theme.colors.primaryLight,
+            alignItems: 'center',
+            justifyContent: 'center',
+            },
 
-  // Pending image preview
-  pendingImageRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: theme.colors.primaryLight,
-    marginHorizontal: 14,
-    marginBottom: 6,
-    padding: 8,
-    borderRadius: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  pendingThumb: { width: 44, height: 44, borderRadius: 8 },
-  pendingLabel: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.colors.text.primary,
-    fontWeight: "500",
-  },
+            // Bottom Sheet
+            modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            },
+            bottomSheet: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: SCREEN_HEIGHT * 0.65,
+            backgroundColor: theme.colors.background,
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+            paddingTop: 12,
+            ...theme.shadows.lg,
+            },
+            sheetHeader: {
+            paddingHorizontal: 24,
+            paddingBottom: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+            },
+            sheetHandle: {
+            width: 40,
+            height: 4,
+            backgroundColor: '#E2E8F0',
+            borderRadius: 2,
+            alignSelf: 'center',
+            marginBottom: 16,
+            },
+            sheetTitleRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            },
+            sheetTitle: {
+            fontSize: 20,
+            fontWeight: '700',
+            color: theme.colors.primary,
+            },
+            sheetSubtitle: {
+            fontSize: 14,
+            color: theme.colors.text.secondary,
+            marginTop: 4,
+            },
+            sheetContent: {
+            padding: 20,
+            gap: 16,
+            },
+            resultItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: theme.colors.surface,
+            borderRadius: 18,
+            padding: 12,
+            gap: 16,
+            ...theme.shadows.sm,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            },
+            resultImage: {
+            width: 60,
+            height: 60,
+            borderRadius: 12,
+            backgroundColor: theme.colors.background,
+            },
+            resultInfo: {
+            flex: 1,
+            },
+            resultName: {
+            fontSize: 14,
+            fontWeight: '600',
+            color: theme.colors.text.primary,
+            lineHeight: 20,
+            },
+            buyText: {
+            fontSize: 13,
+            fontWeight: '700',
+            color: theme.colors.primaryAccent,
+            marginTop: 6,
+            },
 
-  // Input bar
-  inputBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    gap: 8,
-  },
-  iconBtn: { padding: 4, justifyContent: "center", alignItems: "center" },
-  input: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === "ios" ? 10 : 8,
-    fontSize: 14.5,
-    color: theme.colors.text.primary,
-    maxHeight: 110,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendBtnDisabled: { backgroundColor: theme.colors.border },
-  
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  loadingText: {
-    color: theme.colors.text.secondary,
-    fontSize: 14,
-  },
-});
+            // Typing dots
+            typingDot: {
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            backgroundColor: theme.colors.primaryAccent,
+            },
+
+            // Pending image preview
+            pendingImageRow: {
+            flexDirection: "row",
+            alignItems: "center",
+            backgroundColor: theme.colors.primaryLight,
+            marginHorizontal: 14,
+            marginBottom: 6,
+            padding: 8,
+            borderRadius: 12,
+            gap: 10,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            },
+            pendingThumb: { width: 44, height: 44, borderRadius: 8 },
+            pendingLabel: {
+            flex: 1,
+            fontSize: 13,
+            color: theme.colors.text.primary,
+            fontWeight: "500",
+            },
+
+            // Input bar
+            inputBar: {
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 10,
+            paddingVertical: 10,
+            backgroundColor: theme.colors.surface,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+            gap: 8,
+            },
+            iconBtn: { padding: 4, justifyContent: "center", alignItems: "center" },
+            input: {
+            flex: 1,
+            backgroundColor: theme.colors.background,
+            borderRadius: 22,
+            paddingHorizontal: 16,
+            paddingVertical: Platform.OS === "ios" ? 10 : 8,
+            fontSize: 14.5,
+            color: theme.colors.text.primary,
+            maxHeight: 110,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            },
+            sendBtn: {
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: theme.colors.primary,
+            alignItems: "center",
+            justifyContent: "center",
+            },
+            sendBtnDisabled: { backgroundColor: theme.colors.border },
+
+            loadingContainer: {
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 12,
+            },
+            loadingText: {
+            color: theme.colors.text.secondary,
+            fontSize: 14,
+            },
+
+            // Image Preview
+            previewOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.9)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            },
+            previewClose: {
+            position: 'absolute',
+            top: 50,
+            right: 20,
+            zIndex: 1,
+            padding: 10,
+            },
+            fullImage: {
+            width: '100%',
+            height: '80%',
+            },
+            });
 
 
