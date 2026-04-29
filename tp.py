@@ -1,16 +1,91 @@
 text = """
-async getSideEffects(medicine: { name: string; dosage: string; instructions: string }): Promise<AIResponse> {
-    const response = await api.post('/api/v1/ai/side-effects', {
-      medicine: {
-        name: medicine.name,
-        dosage: medicine.dosage,
-        instructions: medicine.instructions
-      }
-    });
-    return response.data;
-  }
-
-  basically we need to create a route that takes this as input and returns the side effects of the medicine. The input will be a JSON object with the name, dosage, and instructions of the medicine. The output will be a JSON object with the side effects of the medicine. We will be again using qwen2.5:3b model which is sestuped already.
+{
+  "user_id": "69e9edb32c722b786955904f",
+  "start_date": "2026-04-22",
+  "end_date": "2026-04-28",
+  "daily_summaries": [
+    {
+      "date": "2026-04-22",
+      "taken_count": 0,
+      "total_slots": 3,
+      "adherence_pct": 0
+    },
+    {
+      "date": "2026-04-23",
+      "taken_count": 0,
+      "total_slots": 3,
+      "adherence_pct": 0
+    },
+    {
+      "date": "2026-04-24",
+      "taken_count": 0,
+      "total_slots": 3,
+      "adherence_pct": 0
+    },
+    {
+      "date": "2026-04-25",
+      "taken_count": 0,
+      "total_slots": 3,
+      "adherence_pct": 0
+    },
+    {
+      "date": "2026-04-26",
+      "taken_count": 0,
+      "total_slots": 3,
+      "adherence_pct": 0
+    },
+    {
+      "date": "2026-04-27",
+      "taken_count": 0,
+      "total_slots": 3,
+      "adherence_pct": 0
+    },
+    {
+      "date": "2026-04-28",
+      "taken_count": 2,
+      "total_slots": 3,
+      "adherence_pct": 66.7
+    }
+  ],
+  "grid": [
+    {
+      "morning": "missed",
+      "afternoon": "none",
+      "evening": "missed"
+    },
+    {
+      "morning": "missed",
+      "afternoon": "none",
+      "evening": "missed"
+    },
+    {
+      "morning": "missed",
+      "afternoon": "none",
+      "evening": "missed"
+    },
+    {
+      "morning": "missed",
+      "afternoon": "none",
+      "evening": "missed"
+    },
+    {
+      "morning": "missed",
+      "afternoon": "none",
+      "evening": "missed"
+    },
+    {
+      "morning": "missed",
+      "afternoon": "none",
+      "evening": "missed"
+    },
+    {
+      "morning": "missed",
+      "afternoon": "none",
+      "evening": "taken"
+    }
+  ],
+  "overall_adherence_pct": 9.5
+}
 """
 
 # Remove newline characters

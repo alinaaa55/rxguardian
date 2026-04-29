@@ -1,12 +1,13 @@
-import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -16,8 +17,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { palette, theme } from "../constants/theme";
 import api from "../services/api";
-import { theme, palette } from "../constants/theme";
 import { notificationService } from "../services/notificationService";
 
 const ICON_OPTIONS = [
@@ -39,6 +40,237 @@ const COLOR_OPTIONS = [
   { color: "#7C3AED", bg: "#EDE9FE" },
   { color: palette.success.main, bg: palette.success.light },
 ];
+
+// ── Animated Prescription Loader ──
+function PrescriptionLoader() {
+  const scanLine = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(1)).current;
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+  const pillRotate = useRef(new Animated.Value(0)).current;
+  const glowOpacity = useRef(new Animated.Value(0.3)).current;
+
+  const [tipIndex, setTipIndex] = useState(0);
+  const tips = [
+    "Reading your prescription…",
+    "Identifying medicines…",
+    "Checking dosage details…",
+    "Almost done!",
+  ];
+
+  useEffect(() => {
+    // Scan line sweeping up and down
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanLine, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(scanLine, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Pill icon rotation
+    Animated.loop(
+      Animated.timing(pillRotate, { toValue: 1, duration: 3000, easing: Easing.linear, useNativeDriver: true })
+    ).start();
+
+    // Glow pulse
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowOpacity, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(glowOpacity, { toValue: 0.3, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Staggered dots
+    const dotAnim = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 400, useNativeDriver: true }),
+          Animated.delay(800 - delay),
+        ])
+      ).start();
+
+    dotAnim(dot1, 0);
+    dotAnim(dot2, 200);
+    dotAnim(dot3, 400);
+
+    // Cycle tips
+    const tipTimer = setInterval(() => {
+      setTipIndex((i) => (i + 1) % tips.length);
+    }, 2000);
+
+    return () => clearInterval(tipTimer);
+  }, []);
+
+  const scanTranslateY = scanLine.interpolate({ inputRange: [0, 1], outputRange: [0, 160] });
+  const pillSpin = pillRotate.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+
+  const dotScale = (anim: Animated.Value) =>
+    anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.3] });
+  const dotOpacity = (anim: Animated.Value) =>
+    anim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
+
+  return (
+    <View style={loaderStyles.container}>
+      {/* Background glow blob */}
+      <Animated.View style={[loaderStyles.glowBlob, { opacity: glowOpacity }]} />
+
+      {/* Prescription card mock */}
+      <View style={loaderStyles.card}>
+        {/* Header strip */}
+        <View style={loaderStyles.cardHeader}>
+          <Animated.View style={{ transform: [{ rotate: pillSpin }] }}>
+            <MaterialCommunityIcons name="pill" size={22} color={theme.colors.primaryAccent} />
+          </Animated.View>
+          <Text style={loaderStyles.cardHeaderText}>RxGuardian...</Text>
+        </View>
+
+        {/* Fake text lines */}
+        {[90, 70, 80, 55, 75].map((w, i) => (
+          <View key={i} style={[loaderStyles.fakeLine, { width: `${w}%` as any, marginTop: i === 3 ? 12 : 6 }]} />
+        ))}
+
+        {/* Scan line sweeping */}
+        <Animated.View style={[loaderStyles.scanLine, { transform: [{ translateY: scanTranslateY }] }]}>
+          <View style={loaderStyles.scanLineInner} />
+          <View style={loaderStyles.scanLineFlarLeft} />
+          <View style={loaderStyles.scanLineFlareRight} />
+        </Animated.View>
+      </View>
+
+      {/* Status text */}
+      <Text style={loaderStyles.tipText}>{tips[tipIndex]}</Text>
+
+      {/* Bouncing dots */}
+      <View style={loaderStyles.dotsRow}>
+        {[dot1, dot2, dot3].map((dot, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              loaderStyles.dot,
+              {
+                transform: [{ scale: dotScale(dot) }],
+                opacity: dotOpacity(dot),
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const loaderStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: theme.colors.background,
+  },
+  glowBlob: {
+    position: "absolute",
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: theme.colors.primaryLight,
+    transform: [{ scaleY: 0.6 }],
+    shadowColor: theme.colors.primaryAccent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 60,
+    elevation: 30,
+  },
+  card: {
+    width: 240,
+    height: 200,
+    backgroundColor: theme.colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 18,
+    overflow: "hidden",
+    shadowColor: palette.black,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    paddingBottom: 10,
+  },
+  cardHeaderText: {
+    color: theme.colors.primary,
+    fontWeight: "800",
+    letterSpacing: 2,
+  },
+  fakeLine: {
+    height: 8,
+    backgroundColor: palette.slate[100],
+    borderRadius: 4,
+  },
+  scanLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 40,
+    height: 2,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  scanLineInner: {
+    flex: 1,
+    height: 2,
+    backgroundColor: theme.colors.primaryAccent,
+    opacity: 0.9,
+    shadowColor: theme.colors.primaryAccent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+  },
+  scanLineFlarLeft: {
+    position: "absolute",
+    left: 0,
+    width: 20,
+    height: 10,
+    backgroundColor: theme.colors.primaryAccent,
+    opacity: 0.4,
+    borderRadius: 5,
+  },
+  scanLineFlareRight: {
+    position: "absolute",
+    right: 0,
+    width: 20,
+    height: 10,
+    backgroundColor: theme.colors.primaryAccent,
+    opacity: 0.4,
+    borderRadius: 5,
+  },
+  tipText: {
+    color: theme.colors.text.secondary,
+    fontSize: 14,
+    marginTop: 28,
+    letterSpacing: 0.3,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 16,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.primaryAccent,
+  },
+});
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -84,7 +316,7 @@ export default function ScanScreen() {
     setMedicineName(med.name || "");
     setDosage(med.dosage || "");
     setInstructions(med.instructions || "");
-    
+
     // Parse frequency X-X-X
     const freq = med.frequency || "1-0-1";
     const parts = freq.split("-");
@@ -210,7 +442,7 @@ export default function ScanScreen() {
       tSlots.forEach(slot => {
         notificationService.scheduleMedicineReminder(medicineId, medicineName, slot.time);
       });
-      
+
       if (currentIndex < detectedMedicines.length - 1) {
         const nextIdx = currentIndex + 1;
         setCurrentIndex(nextIdx);
@@ -332,10 +564,7 @@ export default function ScanScreen() {
     <LinearGradient colors={["#020617", "#0B1B34"]} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1, justifyContent: "center" }}>
         {loading ? (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#22c55e" />
-            <Text style={{ color: "white", marginTop: 12 }}>Processing...</Text>
-          </View>
+          <PrescriptionLoader />
         ) : (
           <Text style={{ color: "white", textAlign: "center" }}>
             Preparing scan...
@@ -362,9 +591,9 @@ export default function ScanScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Icon selection */}
               <Text style={styles.label}>ICON</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.iconRow}
               >
                 {ICON_OPTIONS.map((opt) => (
@@ -788,5 +1017,3 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
 });
-
-

@@ -1,24 +1,24 @@
-import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { useState, useEffect } from "react";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
-    Modal,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    KeyboardAvoidingView,
-    Platform,
-    ActivityIndicator,
-    Alert,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { theme, palette } from "../constants/theme";
-import api from "../services/api";
+import { palette, theme } from "../constants/theme";
 import { aiService } from "../services/aiService";
+import api from "../services/api";
 import { notificationService } from "../services/notificationService";
 
 const ICON_OPTIONS = [
@@ -104,7 +104,7 @@ export default function AddMedScreen() {
       setDosage(med.dosage);
       setInstructions(med.instructions);
       setDurationDays(med.duration_days.toString());
-      
+
       const parts = (med.frequency || "0-0-0").split("-");
       setFrequencySlots({
         morning: parts[0] === "1",
@@ -122,7 +122,7 @@ export default function AddMedScreen() {
         else newTimeSlots.evening = ts.time;
       });
       setTimeSlots(newTimeSlots);
-      
+
       setSelectedIcon(med.icon || "pill");
       const colorOpt = COLOR_OPTIONS.find(c => c.color === med.color) || COLOR_OPTIONS[0];
       setSelectedColor(colorOpt);
@@ -222,8 +222,8 @@ export default function AddMedScreen() {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
       {renderTimePicker()}
-      
-      <KeyboardAvoidingView 
+
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
@@ -243,9 +243,9 @@ export default function AddMedScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={styles.sectionLabel}>ICON</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.iconRow}
           >
             {ICON_OPTIONS.map((opt) => (
@@ -286,8 +286,8 @@ export default function AddMedScreen() {
           <View style={styles.fieldGroup}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text style={styles.fieldSub}>Medicine Name</Text>
-              <TouchableOpacity 
-                style={[styles.aiCheckBtn, !medicineName.trim() && { opacity: 0.5 }]} 
+              <TouchableOpacity
+                style={[styles.aiCheckBtn, !medicineName.trim() && { opacity: 0.5 }]}
                 onPress={handleCheckInteractions}
                 disabled={loadingAI || !medicineName.trim()}
               >

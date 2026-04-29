@@ -1,22 +1,22 @@
 import { Feather, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from "react-native";
-import { theme } from "../../constants/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { storage } from "../../services/storage";
-import { useFocusEffect } from "@react-navigation/native";
-import api from "../../services/api";
+import { theme } from "../../constants/theme";
 import { useSettings } from "../../context/SettingsContext";
 import { aiService } from "../../services/aiService";
+import api from "../../services/api";
+import { storage } from "../../services/storage";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -38,7 +38,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { fontSizeMultiplier, elderlyMode } = useSettings();
-  
+
   const [userName, setUserName] = useState("User");
   const [todayData, setTodayData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +60,7 @@ export default function HomeScreen() {
       if (tracking.data?.medicines && tracking.data.medicines.length > 0) {
         // We pass the list of medicine names to check for interactions among them
         const medNames = tracking.data.medicines.map((m: any) => m.medicine_name).join(", ");
-        
+
         // Map today's meds to the format aiService expects
         const currentMeds = tracking.data.medicines.map((m: any) => ({
           name: m.medicine_name,
@@ -68,7 +68,7 @@ export default function HomeScreen() {
           instructions: m.instructions || ""
         }));
 
-        fetchInteractionCheck(medNames, currentMeds);
+        fetchInteractionCheck(medNames, []);
       }
     } catch (error) {
       console.error("Home load error:", error);
@@ -97,16 +97,16 @@ export default function HomeScreen() {
 
   const formatText = (text: string) => {
     if (!text) return null;
-    
+
     // Clean up markdown markers (###, **), code blocks, and "Markdown:" labels
     let cleanText = text
       .replace(/```markdown\n?/g, "")
       .replace(/```\n?/g, "")
       .replace(/^Markdown:\s*\n?/i, "")
       .trim();
-    
+
     const lines = cleanText.split("\n");
-    
+
     return lines.map((line, lineIdx) => {
       const trimmedLine = line.trim();
       if (!trimmedLine && lineIdx !== lines.length - 1) return <Text key={lineIdx}>{"\n"}</Text>;
@@ -201,11 +201,11 @@ export default function HomeScreen() {
           </View>
 
           {loading ? (
-             <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 20 }} />
+            <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginTop: 20 }} />
           ) : todayMeds.length === 0 ? (
-             <View style={styles.medicineCard}>
-                <Text style={[styles.subText, { fontSize: 13 * fontSizeMultiplier }]}>No medications scheduled for today.</Text>
-             </View>
+            <View style={styles.medicineCard}>
+              <Text style={[styles.subText, { fontSize: 13 * fontSizeMultiplier }]}>No medications scheduled for today.</Text>
+            </View>
           ) : (
             todayMeds.map((med: any, idx: number) => (
               <TouchableOpacity
@@ -260,8 +260,8 @@ export default function HomeScreen() {
               </View>
 
               <Text style={[styles.alertText, { fontSize: 12 * fontSizeMultiplier }, interactionResult && !interactionResult.includes('⚠️') && { color: theme.colors.text.primary }]}>
-                {loadingAI 
-                  ? "Analyzing your medications for safety..." 
+                {loadingAI
+                  ? "Analyzing your medications for safety..."
                   : formatText(interactionResult || "No interactions detected in your current regimen. Stay safe!")}
               </Text>
             </View>

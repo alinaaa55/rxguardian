@@ -13,12 +13,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { theme } from "../constants/theme";
 import { storage } from "../services/storage";
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [form, setForm] = useState({
     phone: "",
@@ -31,6 +33,18 @@ export default function ProfileSetupScreen() {
 
   const handleChange = (key: string, value: string) => {
     setForm({ ...form, [key]: value });
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      const formattedDate = selectedDate.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+      });
+      handleChange("dob", formattedDate);
+    }
   };
 
   const handleSave = async () => {
@@ -81,15 +95,27 @@ export default function ProfileSetupScreen() {
                 keyboardType="phone-pad"
               />
               <Divider />
-              <InputRow
-                label="Date of Birth"
-                value={form.dob}
-                icon={<Feather name="calendar" size={18} color={theme.colors.primary} />}
-                onChange={(v) => handleChange("dob", v)}
-                placeholder="DD Month YYYY"
-              />
+              <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+                <InputRow
+                  label="Date of Birth"
+                  value={form.dob}
+                  icon={<Feather name="calendar" size={18} color={theme.colors.primary} />}
+                  placeholder="Select Date of Birth"
+                  editable={false}
+                />
+              </TouchableOpacity>
             </View>
           </View>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={form.dob ? new Date(form.dob) : new Date(2000, 0, 1)}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onDateChange}
+              maximumDate={new Date()}
+            />
+          )}
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Medical Information</Text>
@@ -141,7 +167,7 @@ export default function ProfileSetupScreen() {
   );
 }
 
-function InputRow({ label, value, icon, onChange, placeholder, keyboardType }: any) {
+function InputRow({ label, value, icon, onChange, placeholder, keyboardType, editable = true }: any) {
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoIcon}>{icon}</View>
@@ -154,6 +180,8 @@ function InputRow({ label, value, icon, onChange, placeholder, keyboardType }: a
           placeholder={placeholder}
           placeholderTextColor={theme.colors.text.secondary}
           keyboardType={keyboardType}
+          editable={editable}
+          pointerEvents={editable ? 'auto' : 'none'}
         />
       </View>
     </View>

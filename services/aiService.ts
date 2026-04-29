@@ -22,7 +22,7 @@ export const aiService = {
    */
   async getInteractionAlert(newMedicine: string, overrideCurrentMeds?: any[]): Promise<AIResponse> {
     const userProfile = await storage.getUserInfo();
-    const currentMeds = overrideCurrentMeds || await storage.getMeds();
+    const currentMeds = overrideCurrentMeds !== undefined ? overrideCurrentMeds : await storage.getMeds();
     
     const response = await api.post('/api/v1/ai/interaction-alert', {
       // Changed from string to dict to match Pydantic schema

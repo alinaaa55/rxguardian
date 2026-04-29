@@ -9,6 +9,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -22,10 +23,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "../constants/theme";
-import { chatService, PharmEasyResult } from "../services/chatService";
 import { useSettings } from "../context/SettingsContext";
+import { chatService, PharmEasyResult } from "../services/chatService";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -140,12 +141,12 @@ const TypingIndicator = () => {
 };
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
-const MessageBubble = ({ 
-  message, 
+const MessageBubble = ({
+  message,
   onMedicinePress,
-  onImagePress 
-}: { 
-  message: UIMessage, 
+  onImagePress
+}: {
+  message: UIMessage,
   onMedicinePress: (res: PharmEasyResult) => void,
   onImagePress: (uri: string) => void
 }) => {
@@ -188,7 +189,7 @@ const MessageBubble = ({
       <View style={{ maxWidth: "82%" }}>
         <View style={{ gap: 4 }}>
           {message.imageUri && (
-            <TouchableOpacity 
+            <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => onImagePress(message.imageUri!)}
               style={[
@@ -264,6 +265,8 @@ export default function ChatScreen() {
   const router = useRouter();
   const flatRef = useRef<FlatList>(null);
   const { fontSizeMultiplier, elderlyMode } = useSettings();
+  // ✅ Get real device safe area insets
+  const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
@@ -274,9 +277,21 @@ export default function ChatScreen() {
   // Bottom Sheet State
   const [selectedMedicine, setSelectedMedicine] = useState<PharmEasyResult | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
-  
+
   // Image Preview State
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  // Keyboard visibility tracking (Android fix)
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const scrollToBottom = () => {
     setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
@@ -447,6 +462,7 @@ export default function ChatScreen() {
   };
 
   return (
+    // ✅ SafeAreaView only handles top + sides; bottom is handled by inputBar padding
     <SafeAreaView style={[styles.safe, elderlyMode && { backgroundColor: "#fff" }]} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" />
 
@@ -483,10 +499,20 @@ export default function ChatScreen() {
       </View>
 
       {/* ── Messages + Input ── */}
+      {/*
+        ✅ FIX EXPLANATION:
+        - behavior="padding" on iOS: KAV shrinks its own height by the keyboard height,
+          pushing the input bar up flush against the keyboard. No gap.
+        - behavior="height" on Android: same effect — KAV shrinks to fit above keyboard.
+        - keyboardVerticalOffset is 0 because SafeAreaView already consumed the top inset.
+        - The old nested <SafeAreaView edges={['bottom']}> around the input bar was adding
+          extra bottom padding ON TOP of the keyboard avoidance, causing the gap.
+          We removed it and use insets.bottom directly on the inputBar instead.
+      */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 20}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         {loadingHistory ? (
           <View style={styles.loadingContainer}>
@@ -509,12 +535,12 @@ export default function ChatScreen() {
               />
             )}
             onContentSizeChange={scrollToBottom}
-            />
-            )}
+          />
+        )}
 
-            {/* Pending image preview */}
-            {pendingImage && (
-            <View style={styles.pendingImageRow}>
+        {/* Pending image preview */}
+        {pendingImage && (
+          <View style={styles.pendingImageRow}>
             <Image source={{ uri: pendingImage }} style={styles.pendingThumb} />
             <Text style={[styles.pendingLabel, { fontSize: 13 * fontSizeMultiplier }]}>Image ready to send</Text>
             <TouchableOpacity onPress={() => setPendingImage(null)}>
@@ -524,61 +550,69 @@ export default function ChatScreen() {
                 color={theme.colors.text.secondary}
               />
             </TouchableOpacity>
-            </View>
-            )}
+          </View>
+        )}
 
-            {/* ── Input Bar ── */}
-            <SafeAreaView edges={['bottom']}>
-            <View style={styles.inputBar}>
-            <TouchableOpacity onPress={pickImage} style={styles.iconBtn}>
-              <Ionicons
-                name="add-circle-outline"
-                size={26 * fontSizeMultiplier}
-                color={theme.colors.tabInactive}
-              />
-            </TouchableOpacity>
-
-            <TextInput
-              style={[styles.input, { fontSize: 14.5 * fontSizeMultiplier }]}
-              placeholder="Type a message…"
-              placeholderTextColor={theme.colors.tabInactive}
-              value={input}
-              onChangeText={setInput}
-              multiline
-              maxLength={500}
+        {/* ── Input Bar ── */}
+        {/*
+          ✅ No more nested SafeAreaView here.
+          paddingBottom uses insets.bottom so it sits correctly above the home indicator
+          on notched iPhones (34px) and flush at the bottom on Android / older iPhones (0px).
+        */}
+        <View
+          style={[
+            styles.inputBar,
+            { paddingBottom: keyboardVisible ? 10 : (insets.bottom > 0 ? insets.bottom : 10) },
+          ]}
+        >
+          <TouchableOpacity onPress={pickImage} style={styles.iconBtn}>
+            <Ionicons
+              name="add-circle-outline"
+              size={26 * fontSizeMultiplier}
+              color={theme.colors.tabInactive}
             />
+          </TouchableOpacity>
 
-            <TouchableOpacity onPress={takePicture} style={styles.iconBtn}>
-              <Feather name="camera" size={22 * fontSizeMultiplier} color={theme.colors.tabInactive} />
-            </TouchableOpacity>
+          <TextInput
+            style={[styles.input, { fontSize: 14.5 * fontSizeMultiplier }]}
+            placeholder="Type a message…"
+            placeholderTextColor={theme.colors.tabInactive}
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={500}
+          />
 
-            <TouchableOpacity
-              onPress={sendMessage}
-              style={[
-                styles.sendBtn,
-                !input.trim() && !pendingImage && styles.sendBtnDisabled,
-              ]}
-              disabled={!input.trim() && !pendingImage}
-            >
-              <Ionicons name="send" size={17 * fontSizeMultiplier} color={theme.colors.surface} />
-            </TouchableOpacity>
-            </View>
-            </SafeAreaView>
-            </KeyboardAvoidingView>
+          <TouchableOpacity onPress={takePicture} style={styles.iconBtn}>
+            <Feather name="camera" size={22 * fontSizeMultiplier} color={theme.colors.tabInactive} />
+          </TouchableOpacity>
 
-            {/* ── Bottom Sheet (Modal) ── */}
-            <Modal
-            visible={sheetVisible}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setSheetVisible(false)}
-            >
-            <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setSheetVisible(false)}
-            />
-            <View style={[styles.bottomSheet, elderlyMode && styles.bottomSheetElderly]}>
-            <View style={styles.sheetHeader}>
+          <TouchableOpacity
+            onPress={sendMessage}
+            style={[
+              styles.sendBtn,
+              !input.trim() && !pendingImage && styles.sendBtnDisabled,
+            ]}
+            disabled={!input.trim() && !pendingImage}
+          >
+            <Ionicons name="send" size={17 * fontSizeMultiplier} color={theme.colors.surface} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* ── Bottom Sheet (Modal) ── */}
+      <Modal
+        visible={sheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSheetVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setSheetVisible(false)}
+        />
+        <View style={[styles.bottomSheet, elderlyMode && styles.bottomSheetElderly]}>
+          <View style={styles.sheetHeader}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetTitleRow}>
               <Text style={[styles.sheetTitle, { fontSize: 20 * fontSizeMultiplier }]}>PharmEasy Results</Text>
@@ -587,12 +621,12 @@ export default function ChatScreen() {
               </TouchableOpacity>
             </View>
             <Text style={[styles.sheetSubtitle, { fontSize: 14 * fontSizeMultiplier }]}>Search results for: {selectedMedicine?.medicine}</Text>
-            </View>
+          </View>
 
-            <ScrollView
+          <ScrollView
             contentContainerStyle={styles.sheetContent}
             showsVerticalScrollIndicator={false}
-            >
+          >
             {selectedMedicine?.results.map((item, index) => (
               <TouchableOpacity
                 key={index}
@@ -606,408 +640,408 @@ export default function ChatScreen() {
                 </View>
               </TouchableOpacity>
             ))}
-            </ScrollView>
-            </View>
-            </Modal>
+          </ScrollView>
+        </View>
+      </Modal>
 
-            {/* ── Image Preview Modal ── */}
-            <Modal
-            visible={!!previewImage}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setPreviewImage(null)}
-            >
-            <View style={styles.previewOverlay}>
-            <TouchableOpacity 
+      {/* ── Image Preview Modal ── */}
+      <Modal
+        visible={!!previewImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
+        <View style={styles.previewOverlay}>
+          <TouchableOpacity
             style={styles.previewClose}
             onPress={() => setPreviewImage(null)}
-            >
+          >
             <Ionicons name="close" size={30 * fontSizeMultiplier} color={theme.colors.surface} />
-            </TouchableOpacity>
+          </TouchableOpacity>
 
-            {previewImage && (
-            <Image 
-              source={{ uri: previewImage }} 
-              style={styles.fullImage} 
+          {previewImage && (
+            <Image
+              source={{ uri: previewImage }}
+              style={styles.fullImage}
               resizeMode="contain"
             />
-            )}
-            </View>
-            </Modal>
-            </SafeAreaView>
-            );
-            }
+          )}
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
 
-            // ─── Styles ───────────────────────────────────────────────────────────────────
-            const styles = StyleSheet.create({
-            safe: { flex: 1, backgroundColor: theme.colors.background },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.colors.background },
 
-            // Header
-            header: {
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 12,
-            paddingVertical: 10,
-            backgroundColor: theme.colors.surface,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            elevation: 2,
-            shadowColor: "#000",
-            shadowOpacity: 0.06,
-            shadowRadius: 4,
-            shadowOffset: { width: 0, height: 2 },
-            },
-            backBtn: { padding: 6, borderRadius: 20 },
-            newChatBtn: { padding: 6, borderRadius: 20 },
-            headerCenter: {
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            marginLeft: 4,
-            },
-            headerAvatar: {
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: theme.colors.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            },
-            headerTitle: {
-            fontSize: 16,
-            fontWeight: "700",
-            color: theme.colors.primary,
-            letterSpacing: 0.2,
-            },
-            onlineRow: {
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            marginTop: 1,
-            },
-            onlineDot: {
-            width: 7,
-            height: 7,
-            borderRadius: 4,
-            backgroundColor: theme.colors.successLight,
-            },
-            onlineText: { fontSize: 12, color: theme.colors.success, fontWeight: "500" },
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  backBtn: { padding: 6, borderRadius: 20 },
+  newChatBtn: { padding: 6, borderRadius: 20 },
+  headerCenter: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginLeft: 4,
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: theme.colors.primary,
+    letterSpacing: 0.2,
+  },
+  onlineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 1,
+  },
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: theme.colors.successLight,
+  },
+  onlineText: { fontSize: 12, color: theme.colors.success, fontWeight: "500" },
 
-            // Messages
-            messageList: { paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
-            bubbleWrapper: {
-            flexDirection: "row",
-            alignItems: "flex-start",
-            gap: 8,
-            marginVertical: 4,
-            },
-            userWrapper: { alignSelf: "flex-end" },
-            aiWrapper: { alignSelf: "flex-start" },
-            avatarSmall: {
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            backgroundColor: theme.colors.primaryLight,
-            alignItems: "center",
-            justifyContent: "center",
-            marginTop: 2,
-            },
-            userAvatarSmall: {
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            backgroundColor: theme.colors.primaryAccent,
-            alignItems: "center",
-            justifyContent: "center",
-            marginLeft: 8,
-            marginTop: 2,
-            },
-            bubble: {
-            borderRadius: 18,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            },
-            userBubble: {
-            backgroundColor: theme.colors.primary,
-            borderBottomRightRadius: 4,
-            },
-            userBubbleElderly: {
-              shadowOpacity: 0,
-              elevation: 0,
-            },
-            aiBubble: {
-            backgroundColor: theme.colors.surface,
-            borderBottomLeftRadius: 4,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            shadowColor: "#000",
-            shadowOpacity: 0.04,
-            shadowRadius: 4,
-            shadowOffset: { width: 0, height: 1 },
-            elevation: 1,
-            },
-            aiBubbleElderly: {
-              borderWidth: 1.5,
-              borderColor: theme.colors.border,
-              shadowOpacity: 0,
-              elevation: 0,
-            },
-            bubbleText: { fontSize: 14.5, lineHeight: 21 },
-            userText: { color: theme.colors.surface },
-            aiText: { color: theme.colors.text.primary },
-            timestamp: {
-            fontSize: 10,
-            color: theme.colors.text.secondary,
-            },
-            uploadedImage: { width: 180, height: 140, borderRadius: 12 },
+  // Messages
+  messageList: { paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
+  bubbleWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginVertical: 4,
+  },
+  userWrapper: { alignSelf: "flex-end" },
+  aiWrapper: { alignSelf: "flex-start" },
+  avatarSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  userAvatarSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primaryAccent,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+    marginTop: 2,
+  },
+  bubble: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  userBubble: {
+    backgroundColor: theme.colors.primary,
+    borderBottomRightRadius: 4,
+  },
+  userBubbleElderly: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  aiBubble: {
+    backgroundColor: theme.colors.surface,
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  aiBubbleElderly: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  bubbleText: { fontSize: 14.5, lineHeight: 21 },
+  userText: { color: theme.colors.surface },
+  aiText: { color: theme.colors.text.primary },
+  timestamp: {
+    fontSize: 10,
+    color: theme.colors.text.secondary,
+  },
+  uploadedImage: { width: 180, height: 140, borderRadius: 12 },
 
-            // Chips Container
-            chipsContainer: {
-            flexDirection: 'column',
-            gap: 10,
-            marginTop: 8,
-            width: '100%',
-            },
-            medicineActionCard: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: theme.colors.surface,
-            padding: 12,
-            borderRadius: 18,
-            gap: 12,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            ...theme.shadows.sm,
-            },
-            medicineActionCardElderly: {
-              borderWidth: 1.5,
-              borderColor: theme.colors.border,
-              shadowOpacity: 0,
-              elevation: 0,
-              padding: 16,
-            },
-            cardImageContainer: {
-            width: 50,
-            height: 50,
-            borderRadius: 10,
-            backgroundColor: theme.colors.background,
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-            },
-            cardImage: {
-            width: '100%',
-            height: '100%',
-            },
-            cardContent: {
-            flex: 1,
-            },
-            cardTitle: {
-            fontSize: 14,
-            fontWeight: '700',
-            color: theme.colors.text.primary,
-            },
-            cardSubtitle: {
-            fontSize: 12,
-            color: theme.colors.text.secondary,
-            marginTop: 2,
-            },
-            cardAction: {
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            backgroundColor: theme.colors.primaryLight,
-            alignItems: 'center',
-            justifyContent: 'center',
-            },
+  // Chips Container
+  chipsContainer: {
+    flexDirection: 'column',
+    gap: 10,
+    marginTop: 8,
+    width: '100%',
+  },
+  medicineActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    padding: 12,
+    borderRadius: 18,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    ...theme.shadows.sm,
+  },
+  medicineActionCardElderly: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+    padding: 16,
+  },
+  cardImageContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.colors.text.primary,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: theme.colors.text.secondary,
+    marginTop: 2,
+  },
+  cardAction: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-            // Bottom Sheet
-            modalOverlay: {
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            },
-            bottomSheet: {
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: SCREEN_HEIGHT * 0.65,
-            backgroundColor: theme.colors.background,
-            borderTopLeftRadius: 30,
-            borderTopRightRadius: 30,
-            paddingTop: 12,
-            ...theme.shadows.lg,
-            },
-            bottomSheetElderly: {
-              shadowOpacity: 0,
-              elevation: 0,
-              borderTopWidth: 2,
-              borderTopColor: theme.colors.primary,
-            },
-            sheetHeader: {
-            paddingHorizontal: 24,
-            paddingBottom: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: theme.colors.border,
-            },
-            sheetHandle: {
-            width: 40,
-            height: 4,
-            backgroundColor: '#E2E8F0',
-            borderRadius: 2,
-            alignSelf: 'center',
-            marginBottom: 16,
-            },
-            sheetTitleRow: {
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            },
-            sheetTitle: {
-            fontSize: 20,
-            fontWeight: '700',
-            color: theme.colors.primary,
-            },
-            sheetSubtitle: {
-            fontSize: 14,
-            color: theme.colors.text.secondary,
-            marginTop: 4,
-            },
-            sheetContent: {
-            padding: 20,
-            gap: 16,
-            },
-            resultItem: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: theme.colors.surface,
-            borderRadius: 18,
-            padding: 12,
-            gap: 16,
-            ...theme.shadows.sm,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            },
-            resultItemElderly: {
-              borderWidth: 1.5,
-              borderColor: theme.colors.border,
-              shadowOpacity: 0,
-              elevation: 0,
-              padding: 16,
-            },
-            resultImage: {
-            width: 60,
-            height: 60,
-            borderRadius: 12,
-            backgroundColor: theme.colors.background,
-            },
-            resultInfo: {
-            flex: 1,
-            },
-            resultName: {
-            fontSize: 14,
-            fontWeight: '600',
-            color: theme.colors.text.primary,
-            lineHeight: 20,
-            },
-            buyText: {
-            fontSize: 13,
-            fontWeight: '700',
-            color: theme.colors.primaryAccent,
-            marginTop: 6,
-            },
+  // Bottom Sheet
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SCREEN_HEIGHT * 0.65,
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 12,
+    ...theme.shadows.lg,
+  },
+  bottomSheetElderly: {
+    shadowOpacity: 0,
+    elevation: 0,
+    borderTopWidth: 2,
+    borderTopColor: theme.colors.primary,
+  },
+  sheetHeader: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.primary,
+  },
+  sheetSubtitle: {
+    fontSize: 14,
+    color: theme.colors.text.secondary,
+    marginTop: 4,
+  },
+  sheetContent: {
+    padding: 20,
+    gap: 16,
+  },
+  resultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderRadius: 18,
+    padding: 12,
+    gap: 16,
+    ...theme.shadows.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  resultItemElderly: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+    padding: 16,
+  },
+  resultImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: theme.colors.background,
+  },
+  resultInfo: {
+    flex: 1,
+  },
+  resultName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.text.primary,
+    lineHeight: 20,
+  },
+  buyText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.colors.primaryAccent,
+    marginTop: 6,
+  },
 
-            // Typing dots
-            typingDot: {
-            width: 7,
-            height: 7,
-            borderRadius: 4,
-            backgroundColor: theme.colors.primaryAccent,
-            },
+  // Typing dots
+  typingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: theme.colors.primaryAccent,
+  },
 
-            // Pending image preview
-            pendingImageRow: {
-            flexDirection: "row",
-            alignItems: "center",
-            backgroundColor: theme.colors.primaryLight,
-            marginHorizontal: 14,
-            marginBottom: 6,
-            padding: 8,
-            borderRadius: 12,
-            gap: 10,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            },
-            pendingThumb: { width: 44, height: 44, borderRadius: 8 },
-            pendingLabel: {
-            flex: 1,
-            fontSize: 13,
-            color: theme.colors.text.primary,
-            fontWeight: "500",
-            },
+  // Pending image preview
+  pendingImageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.colors.primaryLight,
+    marginHorizontal: 14,
+    marginBottom: 6,
+    padding: 8,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  pendingThumb: { width: 44, height: 44, borderRadius: 8 },
+  pendingLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.colors.text.primary,
+    fontWeight: "500",
+  },
 
-            // Input bar
-            inputBar: {
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 10,
-            paddingVertical: 10,
-            backgroundColor: theme.colors.surface,
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            gap: 8,
-            },
-            iconBtn: { padding: 4, justifyContent: "center", alignItems: "center" },
-            input: {
-            flex: 1,
-            backgroundColor: theme.colors.background,
-            borderRadius: 22,
-            paddingHorizontal: 16,
-            paddingVertical: Platform.OS === "ios" ? 10 : 8,
-            fontSize: 14.5,
-            color: theme.colors.text.primary,
-            maxHeight: 110,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-            },
-            sendBtn: {
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: theme.colors.primary,
-            alignItems: "center",
-            justifyContent: "center",
-            },
-            sendBtnDisabled: { backgroundColor: theme.colors.border },
+  // ✅ Input bar — paddingBottom is set dynamically via insets.bottom inline
+  inputBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    backgroundColor: theme.colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    gap: 8,
+  },
+  iconBtn: { padding: 4, justifyContent: "center", alignItems: "center" },
+  input: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
+    fontSize: 14.5,
+    color: theme.colors.text.primary,
+    maxHeight: 110,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  sendBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendBtnDisabled: { backgroundColor: theme.colors.border },
 
-            loadingContainer: {
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 12,
-            },
-            loadingText: {
-            color: theme.colors.text.secondary,
-            fontSize: 14,
-            },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    color: theme.colors.text.secondary,
+    fontSize: 14,
+  },
 
-            // Image Preview
-            previewOverlay: {
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.9)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            },
-            previewClose: {
-            position: 'absolute',
-            top: 50,
-            right: 20,
-            zIndex: 1,
-            padding: 10,
-            },
-            fullImage: {
-            width: '100%',
-            height: '80%',
-            },
-            });
+  // Image Preview
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+    padding: 10,
+  },
+  fullImage: {
+    width: '100%',
+    height: '80%',
+  },
+});
